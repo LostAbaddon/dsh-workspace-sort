@@ -1,0 +1,8 @@
+# dsh-workspace-sort — bundle patch
+#
+# One insert row mounts the package's host half (a no-op loader entry) so that
+# its browser half is served to every Web client. Nothing else in the profile is
+# touched; the plugin adds no Host service, no Config schema and no route.
+- insert:
+    - id: workspace-sort
+      name: 'dsh-workspace-sort'
