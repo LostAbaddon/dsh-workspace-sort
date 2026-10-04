@@ -49,5 +49,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "author": "TartarusMac"
+  "author": "LostAbaddon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LostAbaddon/dsh-workspace-sort.git"
+  },
+  "homepage": "https://github.com/LostAbaddon/dsh-workspace-sort",
+  "bugs": {
+    "url": "https://github.com/LostAbaddon/dsh-workspace-sort/issues"
+  }
 }

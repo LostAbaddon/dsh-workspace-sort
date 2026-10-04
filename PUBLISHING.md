@@ -8,7 +8,7 @@
 
 ```bash
 cd ~/MyApps/dsh-workspace-sort
-git remote add origin git@github.com:<用户名>/dsh-workspace-sort.git
+git remote add origin git@github.com:LostAbaddon/dsh-workspace-sort.git
 git push -u origin main
 ```
 
@@ -17,8 +17,8 @@ git push -u origin main
 推送后补两处元数据（可选，只影响 npm/GitHub 页面的展示）：
 
 ```json
-"repository": { "type": "git", "url": "git+https://github.com/<用户名>/dsh-workspace-sort.git" },
-"homepage": "https://github.com/<用户名>/dsh-workspace-sort"
+"repository": { "type": "git", "url": "git+https://github.com/LostAbaddon/dsh-workspace-sort.git" },
+"homepage": "https://github.com/LostAbaddon/dsh-workspace-sort"
 ```
 
 ## 二、让别人能搜到：加 topic `dsh-plugin`
@@ -28,8 +28,8 @@ DSH 生态里的「插件市场」就是搜索 GitHub 的 **`dsh-plugin`** topic
 别人的安装命令（README 里也写了）：
 
 ```
-插件页 → 添加插件 → github:<用户名>/dsh-workspace-sort
-dsh plugin --profile web add github:<用户名>/dsh-workspace-sort
+插件页 → 添加插件 → github:LostAbaddon/dsh-workspace-sort
+dsh plugin --profile web add github:LostAbaddon/dsh-workspace-sort
 ```
 
 ## 三、npm 通道（可选，需要先换名）
@@ -78,7 +78,7 @@ npm pack --dry-run
 在一个干净的 profile 上按 README 走一遍：
 
 ```bash
-dsh plugin --profile web add github:<用户名>/dsh-workspace-sort
+dsh plugin --profile web add github:LostAbaddon/dsh-workspace-sort
 dsh web
 ```
 

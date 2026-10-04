@@ -13,7 +13,7 @@ DSH 的插件安装入口接受三种来源：**npm 包名**、**GitHub 仓库�
 侧边栏「**插件**」页 →「**添加插件**」→ 在「包名或地址」里填：
 
 ```
-github:<你的GitHub用户名>/<仓库名>
+github:LostAbaddon/dsh-workspace-sort
 ```
 
 或先 `git clone` 到本机，再填克隆后的**绝对路径**：
@@ -30,7 +30,7 @@ github:<你的GitHub用户名>/<仓库名>
 
 ```bash
 # 任选一种来源
-dsh plugin --profile web add github:<你的GitHub用户名>/<仓库名>
+dsh plugin --profile web add github:LostAbaddon/dsh-workspace-sort
 dsh plugin --profile web add /Users/you/code/dsh-workspace-sort
 dsh plugin --profile web add dsh-workspace-sort        # 发布到 npm 之后
 
