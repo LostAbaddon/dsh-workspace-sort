@@ -45,6 +45,18 @@ dsh plugin --profile web remove <安装时用的同一个来源>
 
 包声明了 `dsh.bundle.patch`，所以这一条命令同时完成「装依赖 + 挂进 `dsh.profile.bundles`」，不需要手工改任何 profile 文件。
 
+### 从 GitHub 安装失败时
+
+pnpm 解析 git 依赖走的是 HTTPS。如果所在网络访问 github.com 只能走 SSH（HTTPS 443 不通），会看到 `ERR_PNPM_GIT_RESOLVE_FAILED` / `Failed to resolve git dependency`。按 pnpm 的提示给本机加一条传输改写再重试：
+
+```bash
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+```
+
+或者绕开 git：把仓库 `git clone` 到本机，用克隆后的**绝对路径**安装（上面两处都支持）。
+
+> 安装失败时 `dsh plugin` 可能附带一句「git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed」。本包没有 `prepare`/`install` 脚本，正常情况下不需要任何构建许可——那句话是包装层对 git 类依赖失败的固定追注。
+
 ### npm
 
 本插件尚未发布到 npm；发布步骤见 [PUBLISHING.md](PUBLISHING.md)（注意 npm 上的 `dsh-workspace-sort` 已被他人占用，发布前必须换名）。
