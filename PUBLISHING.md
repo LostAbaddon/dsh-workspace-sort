@@ -4,10 +4,10 @@
 
 ## 一、把目录变成可推送的仓库
 
-本目录位于 `~/DailyWork/projects/dsh-workspace-sort`。它已经是独立的 git 仓库（`main` 分支，含首次提交），把它推到一个**新的 GitHub 仓库**即可：
+本目录位于 `~/MyApps/dsh-workspace-sort`（与 `~/MyApps/ai-cli-bridge` 同一约定：自身是独立仓库，并在 `~/MyApps/.gitignore` 里被忽略，因此不会成为 MyApps 仓库的嵌套仓库）。它已经是独立的 git 仓库（`main` 分支，含首次提交），把它推到一个**新的 GitHub 仓库**即可：
 
 ```bash
-cd ~/DailyWork/projects/dsh-workspace-sort
+cd ~/MyApps/dsh-workspace-sort
 git remote add origin git@github.com:<用户名>/dsh-workspace-sort.git
 git push -u origin main
 ```
