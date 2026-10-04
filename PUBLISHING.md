@@ -66,7 +66,7 @@ npm publish --access public     # 作用域名必须显式 --access public（pac
 npm pack --dry-run
 ```
 
-当前只打 5 个文件：`README.md`、`cordis.patch.yml`、`lib/client.js`、`lib/index.js`、`package.json`。`test/` 与本文档不进包（由 `files` 字段控制）。
+当前只打 6 个文件：`LICENSE`、`README.md`、`cordis.patch.yml`、`lib/client.js`、`lib/index.js`、`package.json`。`test/` 与本文档不进包（由 `files` 字段控制，`LICENSE`/`README` 由 npm 自动带上）。
 
 ## 四、两个刻意的清单选择
 
