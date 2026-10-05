@@ -42,6 +42,9 @@ const {
   planWorkspaceMoves,
   planVisibleRows,
   readGroupBy,
+  readArchivedFilter,
+  visibleConversationIds,
+  hiddenConversationCount,
   directGroupRows,
   hasClassSuffix,
 } = mod.__internals
@@ -81,6 +84,44 @@ test('the grouping mode is read from the shipped view store', () => {
   assert.equal(readGroupBy(storage('{oops')), 'workspace')
   assert.equal(readGroupBy(storage(null)), 'workspace')
   assert.equal(readGroupBy(null), 'workspace')
+})
+
+test('the archived-row filter is read from the same store', () => {
+  const storage = (raw) => ({ getItem: (key) => (key === 'dsh.workspace.view.v5' ? raw : null) })
+  assert.equal(readArchivedFilter(storage('{"archivedFilter":"show"}')), 'show')
+  assert.equal(readArchivedFilter(storage('{"archivedFilter":"only"}')), 'only')
+  assert.equal(readArchivedFilter(storage('{"archivedFilter":"default"}')), 'default')
+  assert.equal(readArchivedFilter(storage('{"archivedFilter":"nonsense"}')), 'default')
+  assert.equal(readArchivedFilter(storage(null)), 'default')
+  assert.equal(readArchivedFilter(null), 'default')
+})
+
+// ---------------------------------------------------------------- fold counting
+
+test('a section lists its conversations in the shipped browser’s own terms', () => {
+  const sessionsById = {
+    live: { id: 'live', updatedAt: 10 },
+    archived: { id: 'archived', updatedAt: 9 },
+    blank: { id: 'blank', updatedAt: 8, blank: true },
+    child: { id: 'child', updatedAt: 7, origin: 'subagent' },
+    otherBlank: { id: 'otherBlank', updatedAt: 6, blank: true },
+  }
+  const sessionIds = ['live', 'archived', 'blank', 'child', 'otherBlank', 'missing']
+  const base = { sessionIds, sessionsById, currentId: 'blank' }
+  assert.deepEqual(visibleConversationIds({ ...base, archivedFilter: 'default', archivedIds: new Set(['archived']) }), ['live', 'blank'])
+  assert.deepEqual(visibleConversationIds({ ...base, archivedFilter: 'show', archivedIds: new Set(['archived']) }), ['live', 'archived', 'blank'])
+  assert.deepEqual(visibleConversationIds({ ...base, archivedFilter: 'only', archivedIds: new Set(['archived']) }), ['archived'])
+  assert.deepEqual(visibleConversationIds({ ...base, currentId: 'otherBlank', archivedFilter: 'default', archivedIds: new Set(['archived']) }), ['live', 'otherBlank'])
+})
+
+test('the collapsed line counts exactly the conversations kept out of sight', () => {
+  const idle = (id) => id !== 'running'
+  const ids = ['running', 'a', 'b', 'c', 'd']
+  assert.equal(hiddenConversationCount(ids, 3, idle), 1)
+  assert.equal(hiddenConversationCount(ids, 4, idle), 0)
+  assert.equal(hiddenConversationCount(ids, 9, idle), 0)
+  assert.equal(hiddenConversationCount([], 5, idle), 0)
+  assert.equal(hiddenConversationCount(undefined, 5, idle), 0)
 })
 
 // ---------------------------------------------------------------- recency

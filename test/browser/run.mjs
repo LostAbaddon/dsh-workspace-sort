@@ -6,10 +6,14 @@
  *   DSH_COOKIE='dsh-auth-...=v1....' node test/browser/run.mjs
  *
  * Environment:
- *   DSH_COOKIE  required — the `name=value` browser-session cookie of the
- *               authenticated DSH Web client (see the README).
- *   CDP_PORT    Chrome's remote debugging port (default 9333).
- *   GUI_URL     the DSH Web URL (default http://127.0.0.1:19387/).
+ *   DSH_COOKIE      required — the `name=value` browser-session cookie of the
+ *                   authenticated DSH Web client (see the README).
+ *   CDP_PORT        Chrome's remote debugging port (default 9333).
+ *   GUI_URL         the DSH Web URL (default http://127.0.0.1:19387/).
+ *   DSH_FOLD_LIMIT  conversations per Workspace the sidebar opens with
+ *                   (default 5). It is seeded into the page's localStorage
+ *                   before the client boots, so the sidebar assertions observe
+ *                   the running plugin instance itself.
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..', '..')
 const port = Number(process.env.CDP_PORT ?? 9333)
 const url = process.env.GUI_URL ?? 'http://127.0.0.1:19387/'
+const foldLimit = Number(process.env.DSH_FOLD_LIMIT ?? 5)
 const cookie = process.env.DSH_COOKIE ?? ''
 if (cookie === '') {
   console.error('DSH_COOKIE is required (the dsh-auth-* browser-session cookie)')
@@ -65,6 +70,13 @@ await new Promise((resolve, reject) => {
 
 await send('Page.enable')
 await send('Runtime.enable')
+// Seed the browser-local preferences before any client script runs, so the
+// plugin instance the app mounts is the one the sidebar assertions observe.
+const seed = `try {
+  localStorage.setItem('dsh.workspace-sort.v1', ${JSON.stringify(JSON.stringify({ visiblePerWorkspace: foldLimit, sortWorkspaces: false }))});
+  localStorage.setItem('dsh.workspace.view.v5', JSON.stringify({ groupBy: 'workspace', orderBy: 'updated', groupExpansion: {}, sessionOrderByAccount: {}, archivedFilter: 'default' }));
+} catch (_ignored) {}`
+await send('Page.addScriptToEvaluateOnNewDocument', { source: seed })
 await send('Network.setCookie', {
   name: cookieName,
   value: cookieValue,
@@ -76,7 +88,7 @@ await send('Page.navigate', { url })
 await new Promise((resolve) => setTimeout(resolve, 14000))
 
 const result = await send('Runtime.evaluate', {
-  expression: `globalThis.__ARGS__ = ${JSON.stringify({ clientSource })};\n${pageScript}`,
+  expression: `globalThis.__ARGS__ = ${JSON.stringify({ clientSource, foldLimit })};\n${pageScript}`,
   returnByValue: true,
   awaitPromise: true,
 })
