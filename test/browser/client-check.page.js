@@ -73,6 +73,33 @@
       await wait(1400)
       report.sidebar.collapsedAgain = readSection(group)
     }
+    // A Workspace whose own section is collapsed shows no conversations at all,
+    // so it must not carry the fold line either.
+    const header = group.querySelector('[data-row-key^="workspace:"]')
+    header?.click()
+    await wait(1200)
+    report.sidebar.collapsedWorkspace = {
+      renderedRows: group.querySelectorAll('[data-row-key^="session:"]').length,
+      control: group.querySelector('[data-dws-fold]') === null ? null : group.querySelector('[data-dws-fold]').textContent,
+    }
+    header?.click()
+    await wait(2000)
+    report.sidebar.reopenedWorkspace = readSection(group)
+
+    // A section the reader had expanded keeps that state across a collapse of
+    // the Workspace header itself.
+    group.querySelector('[data-dws-fold]')?.click()
+    await wait(3200)
+    report.sidebar.expandedBeforeWorkspaceCollapse = readSection(group)
+    header?.click()
+    await wait(1200)
+    report.sidebar.collapsedWorkspaceAfterExpand = {
+      renderedRows: group.querySelectorAll('[data-row-key^="session:"]').length,
+      control: group.querySelector('[data-dws-fold]') === null ? null : group.querySelector('[data-dws-fold]').textContent,
+    }
+    header?.click()
+    await wait(3200)
+    report.sidebar.reopenedExpanded = readSection(group)
   }
 
   // ---- 2. mode gate, with fake Client services -----------------------------
