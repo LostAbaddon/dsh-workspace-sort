@@ -1,8 +1,8 @@
 # dsh-workspace-sort
 
-DeepSeek Harness（DSH）侧边栏插件：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）。「单列表」模式保持 DSH 自己的排序，插件不干预。
+DeepSeek Harness（DSH）侧边栏插件：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；并支持**每个工作区独立记忆模型与思考深度**，点击工作区的新会话按钮时自动使用该工作区上次所选的模型与思考深度作为默认项，而非全局上次所用模型。「单列表」模式保持 DSH 自己的排序，插件不干预。
 
-> English: a DSH sidebar plugin. It orders Workspaces (WorkSpace and Workspace-Tree grouping) by their newest conversation, and makes the per-Workspace visible conversation count configurable in Settings (default 5). The single-list mode keeps DSH's own ordering.
+> English: a DSH sidebar plugin. It orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable in Settings (default 5), and remembers the last selected model and thinking depth independently for each workspace so that clicking the workspace new-session button defaults to that workspace's own model rather than the global one. The single-list mode keeps DSH's own ordering.
 
 ## 安装
 
@@ -69,6 +69,7 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 | --- | --- | --- |
 | 每个工作区显示 `N` 条对话 | `5` | 每个工作区**收拢时**显示 `N` 条空闲对话（1~100） |
 | 工作区按最新对话排序 | 开 | 关掉后工作区恢复 DSH 自身的排列顺序 |
+| 独立记住模型与思考深度 | 开 | 每个工作区独自记录模型与思考深度，新建会话时作为默认项 |
 
 侧边栏本身不需要任何配置：装好即按「最新对话在最上」排；「单列表」模式不受影响。
 
@@ -100,19 +101,37 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 
 ### 偏好存放位置
 
-两个设置项存在**浏览器本地**（`localStorage` 的 `dsh.workspace-sort.v1`），与 DSH 自己的视图选项 `dsh.workspace.view.v5`（分组方式 / 手动排序）同层同寿命：同一 profile 下，桌面窗口与各浏览器标签各自独立。工作区顺序的写入是 **Host 级**的，同一 profile 内所有客户端共享。
+三个设置项存在**浏览器本地**（`localStorage` 的 `dsh.workspace-sort.v1`），与 DSH 自己的视图选项 `dsh.workspace.view.v5`（分组方式 / 手动排序）同层同寿命：同一 profile 下，桌面窗口与各浏览器标签各自独立。每个工作区记住的模型存在同层的 `dsh.workspace-models.v1`。工作区顺序的写入是 **Host 级**的，同一 profile 内所有客户端共享。
+
+### 每个工作区独立的模型与思考深度
+
+DSH 原生只有一个全局的「上次所用模型」，新建会话永远套用它。打开本插件的开关后：
+
+- 你在**某个工作区里**改模型或改思考深度，这次选择被记到**那个工作区**名下；
+- 点某个工作区的**新会话按钮**时，该工作区记下的模型与思考深度被写进新建出来的那个会话，于是输入框上方的选择器与这一轮请求都用它——而不是全局上次所用模型；
+- **某个工作区从没记录过**选择时，不干预，继续用 DSH 全局默认；
+- 选中的会话**已经有对话内容**时一律不覆盖（复用空会话占位的情况会照常套用）。
+
+判断归属按「这个会话属于哪个工作区」，先看工作区的会话成员表，再退回按路径匹配。记录与套用都走同一处：DSH 客户端改模型的唯一通道 `session.selectModel`，所以模型与思考深度一起记、一起用——思考深度只存 DSH 实际接受的那个值，模型不支持思考深度时该字段自然缺席。
+
+> 已知副作用：DSH 的 `selectModel` 在服务端把「本会话的选择」和「全局默认」写在同一次调用里（`agentDefaultModel.saveSelection`，且不等它完成就返回）。因此套用工作区偏好时，全局默认也会跟着变成该工作区的模型。本插件不把全局默认改回去——那要经 `settings/update` 写 `agent-default-model` 条目，既需要条目命名空间与 revision，又会与上面那次「不等完成」的写入抢时序，得不偿失。工作区都没记录过时才会用到全局默认，实际影响只在「刚从有记录的工作区切到没记录的工作区」这一次。
 
 ## 工作方式
 
 | 层 | 文件 | 作用 |
 | --- | --- | --- |
 | Host 半 | `lib/index.js` | 空入口，不注册服务、工具、路由与配置模式，只为让 Loader 拥有本包的装载行、从而让浏览器半被下发 |
-| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠 |
+| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型 |
 | 清单 | `package.json` | `dsh.bundle.patch`（装载行）+ `dsh.client`（浏览器半）+ `exports["./client"]`，被 `dsh-client-modules` 扫描发现——无构建步骤，`lib/` 即产物 |
 
 ## 兼容性与已知边界
 
-- 在 **DSH 0.2.0-rc.2**（macOS 桌面端 + `dsh web`）上实测通过。插件只使用 `slots` / `locale` / `workspaces` / `sessions` / `uiSession` 这几个客户端服务，未使用任何未公开 API。
+- 在 **DSH 0.2.0-rc.2**（macOS 桌面端 + `dsh web`）上实测通过。排序与折叠只用 `slots` / `locale` / `workspaces` / `sessions` / `uiSession` 这几个客户端服务，并以此声明 `inject`。
+- 模型记忆额外需要 `uiWorkspace` 与 `remote.session`，它们**不在** `inject` 里声明，而是用 `ctx.inject` 延后挂载：缺哪个都只让这一项功能关闭（控制台打印 `... the per-Workspace model memory is off`），排序、折叠与设置行照常工作。
+- 读服务一律走 `ctx.get(...)`，不用 `ctx.<服务名>`：Cordis 的 Context 是代理，读一个没在 `inject` 里声明的服务会**抛** `cannot get property "..." without inject`，而可选链 `?.` 挡不住抛出的取值器——一度因此让整个浏览器半挂载失败。
+- 拦截服务方法时按属性种类分别处理：远程命名空间（`RemoteNamespaceService.install`）把每个方法装成**只有 getter、没有 setter** 的自有访问器，而本包是**经典脚本**（非严格模式）——对它直接赋值会被**静默丢弃**，不报错。因此这种情况改为**包裹 getter**；原型方法（`uiWorkspace.connectWorkspace`）则用自有数据属性遮蔽。用错方式的表现是「插件挂载正常、设置行也在，但模型记忆完全不生效且毫无提示」。
+- 若宿主重装远程命名空间（`RemoteNamespaceService.remove()` 会删掉该包装），本插件的包装不会自动补挂；刷新窗口即可恢复。
+- 刷新窗口时若「上次选中的会话」正好是一个空会话，DSH 走 `restoreSelection` 直接复用该空会话（不经过新会话按钮），本插件因此不重新套用工作区偏好。该空会话此前若已被套用过，它自己的会话记录里就带着那个模型，刷新后仍在。
 - 条数折叠依赖侧边栏自身的 DOM 约定：分组节点 class 以 `_groupSection` 结尾，行与展开控件带 `data-row-key="session:<id>" / "overflow:<key>"`。DSH 若改名，排序照常工作，折叠会静默失效；启动时控制台会打印 `[dsh-workspace-sort] mounted: ...` 便于判断。
 - 排序取会话列表的 `updatedAt`，所以在一个工作区里对话会让它跳到最前——这是预期行为。
 - 插件不改变会话在工作区**内部**的排序，那部分由 DSH 自己的「最后更新 / 手动」选项负责。
@@ -120,8 +139,18 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 ## 开发与验证
 
 ```bash
-node --test test/core.test.mjs     # 19 项纯逻辑单测
+node --test test/core.test.mjs     # 42 项单测
 ```
+
+单测覆盖三块：纯决策函数（条数折叠、排序、工作区移动计划、DOM 读行）、按工作区记忆模型的读写与归属判定，以及**按 Cordis 与 DSH 的真实形状挂载整个浏览器半**。上下文替身做到了三件事：读未声明的服务直接抛错、`ctx.get(...)` 答 `undefined`、`ctx.inject(deps, cb)` 只在依赖齐备时回调；`ctx.get` 返回**每次读取新建的跟踪代理**（`cordis.original` 可取回原服务）；`remote.session.selectModel` 装成**只有 getter 的访问器**、`uiWorkspace.connectWorkspace` 放在**原型**上。模型服务缺席时浏览器半仍须挂载成功并注册设置行，这条是针对挂载失败缺陷的回归测试；访问器那条是针对「赋值被静默丢弃」缺陷的回归测试。
+
+真 Cordis 端到端校验（自动从 `dsh` 命令或已安装位置找 Cordis，找不到就设 `DSH_CORDIS` 指向它的 `lib/index.js`）：
+
+```bash
+node test/cordis/run.mjs
+```
+
+它把**真实浏览器半**挂到**真实 Cordis** 上，服务按出厂形状搭：远程命名空间的方法装成只有 getter 的自有访问器、`uiWorkspace.connectWorkspace` 放在原型上。单测里唯一剩下的替身（`inject` 同步回调、`effect` 普通回调）在这里被换成真实 fiber，因此它能抓到单测替身漏掉的问题——「赋值被静默丢弃」那个缺陷正是这样被它抓到的。
 
 真客户端校验（需要 3.x 以上 Chrome、一个已登录的 DSH Web 客户端与它的浏览器会话 cookie）：
 

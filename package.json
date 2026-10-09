@@ -1,9 +1,12 @@
 {
   "name": "dsh-workspace-sort",
   "version": "1.0.0",
-  "description": "Sort DSH sidebar conversations by recency and order workspace groups by their newest conversation; the per-workspace visible conversation count is configurable in Settings.",
+  "description": "Sort DSH sidebar conversations by recency, order workspace groups by their newest conversation, fold visible conversation counts, and remember last selected model and thinking depth per workspace.",
   "type": "module",
   "main": "lib/index.js",
+  "scripts": {
+    "test": "node --test test/core.test.mjs"
+  },
   "exports": {
     ".": {
       "default": "./lib/index.js"
