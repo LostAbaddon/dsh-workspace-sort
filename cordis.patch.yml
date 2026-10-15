@@ -1,8 +1,26 @@
 # dsh-workspace-sort — bundle patch
 #
-# One insert row mounts the package's host half (a no-op loader entry) so that
-# its browser half is served to every Web client. Nothing else in the profile is
-# touched; the plugin adds no Host service, no Config schema and no route.
+# One insert row mounts the package's host half, which installs the per-provider
+# LLM routing patch on the process's `fetch` and serves the proxy Settings
+# routes. The browser half is served from the same package name and registers
+# the sidebar reconcilers, the General-settings row and the proxy Settings page.
+#
+# The row carries no `config`, so nothing about the sidebar half is configurable
+# from here; the sidebar's three preferences live in the browser's local storage
+# and the proxy's document lives in its own file under `$DSH_HOME`.
+#
+# Optional row config (all of it overridable in the profile's patch layer). These
+# only seed a fresh, never-saved installation; the Settings page owns the state
+# after the first save:
+#
+#   - id: workspace-sort
+#     name: 'dsh-workspace-sort'
+#     config:
+#       enabled: false                 # start disabled; the Settings page saves the real state
+#       proxyUrl: ''                   # seed value, e.g. http://127.0.0.1:7890
+#       configPath: ''                 # override the $DSH_HOME/workspace-sort/proxy-config.json location
+#       defaultEnabledProviders: []    # extra provider ids a fresh configuration routes
+#       reportPath: ''                 # write an activation record here, for diagnosis
 - insert:
     - id: workspace-sort
       name: 'dsh-workspace-sort'

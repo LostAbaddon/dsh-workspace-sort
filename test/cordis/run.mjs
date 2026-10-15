@@ -136,15 +136,25 @@ const byId = {
 }
 
 const registrations = []
+const dictionaries = []
 const ctx = new Context()
 ctx.provide('slots', {
   inject: (_key, callback) => callback(),
-  register: (definition) => {
-    registrations.push(definition)
+  register: (definition, component) => {
+    registrations.push({ ...definition, component })
     return () => {}
   },
 })
-ctx.provide('locale', { register: () => () => {}, bind: () => (key) => key })
+ctx.provide('locale', {
+  register: (ns, dict) => {
+    dictionaries.push({ ns, dict })
+    return () => {}
+  },
+  bind: (ns) => {
+    const entry = dictionaries.find((item) => item.ns === ns)
+    return (key) => (entry && entry.dict.zh[key] !== undefined ? entry.dict.zh[key] : key)
+  },
+})
 ctx.provide('workspaces', {
   list: { getSnapshot: () => ({ phase: 'ready', items: workspaces, archivedSessionIds: [] }), subscribe: () => () => {} },
   insertBefore: async () => {},
@@ -167,7 +177,16 @@ console.info = info
 const checks = []
 const check = (label, ok) => checks.push([label, ok === true])
 
-check('the Client half mounts and registers its settings row', registrations.length === 1)
+const registered = new Map(registrations.map((entry) => [entry.name, entry]))
+check('the Client half mounts and registers its settings row', registered.has('settings.general.item'))
+check('the Client half registers the proxy-routing page', registered.has('settings.section'))
+
+const proxy = registered.get('settings.section')
+check('the proxy page sits under the first-level settings sections', proxy?.id === 'llm-proxy')
+check('the proxy page declares its own locale namespace', proxy?.locale === 'workspaceSortProxy')
+check('the proxy page nav label is the localized title', proxy?.label?.() === '代理路由')
+check('the proxy page renders through a component', typeof proxy?.component === 'function')
+
 check('the remote method is still an accessor after interception', Object.getOwnPropertyDescriptor(namespace, 'selectModel')?.get !== undefined)
 
 // A model and thinking depth chosen inside one Workspace, through the wire face.

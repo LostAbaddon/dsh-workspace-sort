@@ -1,11 +1,12 @@
 {
   "name": "dsh-workspace-sort",
-  "version": "1.0.0",
-  "description": "Sort DSH sidebar conversations by recency, order workspace groups by their newest conversation, fold visible conversation counts, and remember last selected model and thinking depth per workspace.",
+  "version": "1.1.0",
+  "description": "Shape the DSH sidebar and the LLM network path: order workspaces by their newest conversation, fold visible conversation counts, remember a model per workspace, edit a past user message in place, and route each LLM provider through a proxy or straight out.",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "node --test test/core.test.mjs test/conversation-edit.test.mjs"
+    "test": "node --test test/core.test.mjs test/conversation-edit.test.mjs test/proxy-core.test.mjs test/proxy-host.test.mjs test/proxy-routing.test.mjs test/proxy-page.test.mjs",
+    "test:cordis": "node test/cordis/run.mjs"
   },
   "exports": {
     ".": {
@@ -14,10 +15,12 @@
     "./client": {
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "lib",
+    "locale",
     "cordis.patch.yml",
     "README.md"
   ],
@@ -31,10 +34,14 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-primitives",
-        "@deepseek-ai/dsh-client-ui-slots"
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-primitives"
       ],
-      "platform": "web"
+      "platform": "web",
+      "immediately": true
     },
     "manifestVersion": 1
   },
@@ -47,7 +54,10 @@
     "workspace",
     "sidebar",
     "session",
-    "sort"
+    "sort",
+    "proxy",
+    "llm",
+    "network"
   ],
   "publishConfig": {
     "access": "public"

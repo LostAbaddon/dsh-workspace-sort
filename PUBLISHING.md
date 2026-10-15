@@ -14,7 +14,6 @@ git push
 ```
 
 `lib/` 是直接提交的产物（本包无构建步骤），所以对方拿到仓库就能用，不需要装依赖或跑构建。`origin` 已是 `git@github.com:LostAbaddon/dsh-workspace-sort.git`。
-
 别人的安装入口是 GitHub 地址（DSH 的插件入口三种来源之一）：
 
 ```
@@ -88,12 +87,13 @@ npm publish --access public     # 作用域名必须显式 --access public（pac
 npm pack --dry-run
 ```
 
-当前只打 6 个文件：`LICENSE`、`README.md`、`cordis.patch.yml`、`lib/client.js`、`lib/index.js`、`package.json`。`test/` 与本文档不进包（由 `files` 字段控制，`LICENSE`/`README` 由 npm 自动带上）。
+当前只打 11 个文件：`LICENSE`、`README.md`、`cordis.patch.yml`、`locale/en.json`、`locale/zh.json`、`lib/client.js`、`lib/index.js`、`lib/proxy-config.js`、`lib/proxy-core.js`、`lib/proxy-transport.js`、`package.json`。`test/` 与 `PUBLISHING.md` 不进包（由 `files` 字段控制，`LICENSE`/`README` 由 npm 自动带上）。
 
-## 四、两个刻意的清单选择
+## 四、三个刻意的清单选择
 
-- **不声明 `peerDependencies`。** DSH 插件管理器会拿包里的 peer 范围与当前运行时比对，不满足就把插件标记为不兼容、**在 profile 启动时拒绝挂载**（本机 `dsh-plugin-marketplace@0.3.1` 现在就卡在这个状态，需要用户手工授予版本豁免）。本插件主机半没有任何 import、浏览器半只 `require('react')`，声明 `@deepseek-ai/cordis` 这类 peer 只会把未来的 DSH 版本变成启动阻塞，因此不声明，兼容范围写在 README 里。
-- **`dsh.client.inject` 列出 `@deepseek-ai/dsh-client-locale` / `-ui-primitives` / `-ui-slots`。** 需要澄清的是：这三个包在精简组合（如 `web` profile）里**并不都是装载行**——`ui-slots` 与 `ui-primitives` 是被打进别的客户端 bundle 的库。这不影响加载：读过 `@deepseek-ai/dsh-client-modules` 的 `arriveGraphRow`，注入项是 `const dependency = this.graphRows.get(packageName); if (dependency !== void 0) …`，不在图里就**静默跳过**。所以这份清单是"互操作声明"，不是硬依赖。
+- **不声明 `peerDependencies`。** DSH 插件管理器会拿包里的 peer 范围与当前运行时比对，不满足就把插件标记为不兼容、**在 profile 启动时拒绝挂载**（本机 `dsh-plugin-marketplace@0.3.1` 现在就卡在这个状态，需要用户手工授予版本豁免）。本插件主机半不 import 任何运行时模块（`undici` 与 `@deepseek-ai/schemastery` 都是运行时按路径解析的软依赖），浏览器半只 `require('react')`，声明 `@deepseek-ai/cordis` 这类 peer 只会把未来的 DSH 版本变成启动阻塞，因此不声明，兼容范围写在 README 里。
+- **`dsh.client.inject` 列出 6 个 `@deepseek-ai/dsh-client-*`。** 需要澄清的是：这些包在精简组合（如 `web` profile）里**并不都是装载行**——`ui-slots` 与 `ui-primitives` 是被打进别的客户端 bundle 的库。这不影响加载：读过 `@deepseek-ai/dsh-client-modules` 的 `arriveGraphRow`，注入项是 `const dependency = this.graphRows.get(packageName); if (dependency !== void 0) …`，不在图里就**静默跳过**。所以这份清单是「互操作声明」，不是硬依赖。`ui-settings` 必须排在前面：代理设置页注册进的 `settings.section` 槽位类型由设置外壳声明。
+- **`dsh.client.immediately: true`。** 代理设置页在启动时就把页签注册进设置外壳，不等页内触发器，与官方装饰模板一致。
 
 ## 五、发布后自检
 
@@ -104,4 +104,8 @@ dsh plugin --profile web add github:LostAbaddon/dsh-workspace-sort
 dsh web
 ```
 
-确认：设置 → 通用 里有「工作区对话排序」；侧边栏工作区按最新对话排序；某个会话数超过设定值的工作区只显示设定条数且没有「展开其余会话」按钮；控制台出现 `[dsh-workspace-sort] mounted: ...`。
+确认：
+
+- 设置 → 通用 里有「工作区对话排序」；侧边栏工作区按最新对话排序；某个会话数超过设定值的工作区只显示设定条数且没有「展开其余会话」按钮；控制台出现 `[dsh-workspace-sort] mounted: ...`。
+- 设置的一级页签里有「代理路由」；页内状态行显示「宿主已接管 fetch」与 undici 版本；勾几个 Provider、填一个代理地址、点「测试代理」拿到握手结果；保存后 `$DSH_HOME/workspace-sort/proxy-config.json` 落盘。
+- 让一个已勾选的 Provider 发一次请求，`/api/dsh-workspace-sort/proxy/diagnostics` 里的 `patch.proxied` 计数递增，未勾选的直连请求让 `patch.direct` 递增。

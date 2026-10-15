@@ -110,7 +110,12 @@
     script.textContent = args.clientSource
     document.body.appendChild(script)
     window.__ModuleLoader__ = realLoader
-    const fakeReact = { createElement: () => null, useState: (value) => [value, () => {}], useEffect: () => {} }
+    const fakeReact = {
+      createElement: () => null,
+      useState: (value) => [value, () => {}],
+      useEffect: () => {},
+      useRef: (value) => ({ current: value }),
+    }
     const mod = captured.factory((id) => {
       if (id === 'react') return fakeReact
       throw new Error(`unexpected require(${id})`)

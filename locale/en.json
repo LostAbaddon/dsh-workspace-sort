@@ -1,0 +1,4 @@
+{
+  "title": "Workspace order and proxy routing",
+  "description": "Order workspaces by their newest conversation, make the per-workspace conversation count configurable, remember a model per workspace, and edit a past user message in place; it also decides per provider whether LLM requests go through a proxy, with the proxy URL and provider rules set on a settings page."
+}

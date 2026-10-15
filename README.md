@@ -1,9 +1,12 @@
 # dsh-workspace-sort
 
-DeepSeek Harness（DSH）侧边栏插件：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；并支持**每个工作区独立记忆模型与思考深度**，点击工作区的新会话按钮时自动使用该工作区上次所选的模型与思考深度作为默认项，而非全局上次所用模型。「单列表」模式保持 DSH 自己的排序，插件不干预。
-此外在每条用户消息的时间与复制之间加一个「修改」按钮：改写这条历史输入，插件会**分岔出新会话、发送改写后的输入、切换过去，并把原会话归档**，侧边栏里看起来就是同一个会话被就地改写了。
+DeepSeek Harness（DSH）插件，两组能力装在一个包里。
 
-> English: a DSH sidebar plugin. It orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable in Settings (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original.
+**侧边栏**：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；**每个工作区独立记忆模型与思考深度**，点工作区的新会话按钮时自动套用该工作区上次的选择。「单列表」模式保持 DSH 自己的排序，插件不干预。每条用户消息的时间与复制之间还有一个「修改」按钮：改写这条历史输入，插件会**分岔出新会话、发送改写后的输入、切换过去，并把原会话归档**。
+
+**模型请求的出口**：按 Provider 决定 DSH 的模型请求走不走代理——需要翻墙才能访问的 Provider（Gemini、OpenRouter 等）走代理，国内可直连的 Provider（DeepSeek、Kimi、MiniMax、GLM 等）保持直连。代理地址与「哪些 Provider 走代理」都在 DSH 的设置页里配置，保存即生效、不用重启。
+
+> English: a DSH plugin with two halves. In the sidebar it orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original. On the network path it decides per provider whether LLM requests reach the network through a proxy — Gemini and OpenRouter through it, DeepSeek, Kimi, MiniMax and GLM straight out — with the proxy URL and the provider rules configured on a Settings page that applies on save.
 
 ## 安装
 
@@ -62,7 +65,7 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 
 本插件尚未发布到 npm；发布步骤见 [PUBLISHING.md](PUBLISHING.md)（注意 npm 上的 `dsh-workspace-sort` 已被他人占用，发布前必须换名）。
 
-## 使用
+## 侧边栏
 
 安装并刷新窗口后：**设置 → 通用 → 工作区对话排序**（位于「繁忙时的发送行为」和「性能与用量」之间）。
 
@@ -141,18 +144,126 @@ DSH 原生只有一个全局的「上次所用模型」，新建会话永远套�
 
 失败时编辑框里显示具体原因，已完成的部分不会静默留在原地。
 
+## 代理路由
+
+### 它解决什么问题
+
+DSH 里同时挂了很多家模型。把代理塞进进程环境变量（`HTTPS_PROXY`）是全局的：一旦设上，DeepSeek 这类本来直连更快、更稳的请求也会被绕进代理，延迟变高，还多一层失败点。反过来不设代理，Gemini、OpenRouter 又完全用不了。
+
+本插件把「走不走代理」变成按请求主机名判断的逐条规则，并且规则可以在界面上改，改完立即生效、不用重启。
+
+### 判定规则
+
+一次请求按下面的顺序判定，先命中先算：
+
+1. 路由总开关关闭 → 直连。
+2. 没填代理地址 → 直连。
+3. 目标主机是本机（`localhost`、`127.0.0.1`、`::1`、`*.local`）→ 直连。
+4. 目标主机命中某条主机规则 → 走代理。
+5. 其余 → 直连。
+
+主机规则来自两处，按顺序拼接：
+
+- **Provider 行**：勾选「走代理」的 Provider 自带一组主机名。例如 Gemini 是 `generativelanguage.googleapis.com`，OpenRouter 是 `openrouter.ai` 与 `*.openrouter.ai`。每行还可以追加自定义主机名（内网网关、自建反代）。
+- **额外主机规则**：与 Provider 无关的独立主机名条目，支持 `*` 通配。
+
+主机名支持三种写法：精确匹配 `api.openai.com`；子域通配 `*.openrouter.ai`（不匹配裸域）；全通配 `*`。
+
+无论配置怎么写，下面这些 Provider 永远不会走代理：`deepseek`、`deepseek-official`、`ollama`、`lmstudio`。
+
+### 设置页
+
+设置 → 一级页签下的「**代理路由**」页：
+
+| 区域 | 作用 |
+| --- | --- |
+| 总开关 | 关掉后所有请求立即恢复直连，配置保留 |
+| 代理地址 | `http://127.0.0.1:7890` 这类地址，省略协议时按 `http://` 处理；支持 `http://用户:口令@主机:端口` |
+| 测试代理 | 向代理发起一次真实的 `CONNECT` 隧道握手并回报结果与耗时，不经过任何第三方探测服务 |
+| Provider 列表 | 逐行勾选是否走代理；显示该行当前覆盖的主机名，可追加自定义主机名 |
+| 额外主机规则 | 独立的主机名条目，可单条停用 |
+| 状态行 | 当前生效的代理地址、规则条数，以及宿主是否已接管 `fetch`、最近一次错误 |
+
+保存即落盘、立即生效。配置写在 `$DSH_HOME/workspace-sort/proxy-config.json`（原子写入），不写 profile 的 patch 层，因此升级不会冲掉它。
+
+### 配置文件
+
+```json
+{
+  "enabled": true,
+  "proxyUrl": "http://127.0.0.1:7890",
+  "providers": {
+    "gemini": { "enabled": true, "extraHosts": [] },
+    "openrouter": { "enabled": true, "extraHosts": ["openrouter.internal"] },
+    "deepseek": { "enabled": false, "extraHosts": [] }
+  },
+  "hosts": [
+    { "pattern": "*.openrouter.ai", "enabled": true, "note": "" }
+  ]
+}
+```
+
+装载行配置可以给一个初始值（用户第一次保存后以配置文件为准）：
+
+```yaml
+- id: workspace-sort
+  name: 'dsh-workspace-sort'
+  config:
+    enabled: false
+    proxyUrl: ''
+    configPath: ''
+    defaultEnabledProviders: []
+    reportPath: ''
+```
+
+### 实现方式
+
+Host 半边在进程的 `globalThis.fetch` 上装一层路由补丁。选这个接入点的原因有两条：
+
+1. 这套 profile 里每个模型适配器最终都走 `globalThis.fetch`——pi-ai 的 OpenAI / Anthropic / Google 三条协议、DSH 自己的 DeepSeek 适配器、各家 SDK 都一样，一个口子覆盖全部。
+2. pi-ai 的 Google 适配器会主动拒绝自定义 `fetch`（源码里明确判断 `options.fetch !== globalThis.fetch` 就抛错），所以没法用「给适配器塞自定义 fetch」这种更局部的办法。
+
+命中代理规则时，请求交给 undici 的 `ProxyAgent` 走 `CONNECT` 隧道；未命中的请求原样交回进程原来的 `fetch`，不做任何包装。补丁在插件卸载时完整还原。
+
+undici 从**运行中应用自己的** `node_modules` 解析，而不是从 profile。原因是 `fetch` 只认「装上了全局 dispatcher 的那个 undici 实例」造出来的 dispatcher：另装一份 undici 属于不同实例，它造的 `ProxyAgent` 会被 `fetch` 以 `UND_ERR_INVALID_ARG` 拒绝。同理，工作区目录安装的插件按真实路径解析模块，所以 `undici`、`@deepseek-ai/schemastery` 这类依赖不能用裸模块名导入，必须从应用目录解析。
+
+Host 暴露的接口（供设置页与诊断使用）：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| GET | `/api/dsh-workspace-sort/proxy/state` | 配置、Provider 列表、生效主机规则、运行状态 |
+| POST | `/api/dsh-workspace-sort/proxy/config` | 保存配置并立即生效 |
+| POST | `/api/dsh-workspace-sort/proxy/test` | 测试代理连通性 |
+| POST | `/api/dsh-workspace-sort/proxy/reset` | 恢复默认配置 |
+| POST | `/api/dsh-workspace-sort/proxy/selftest` | 用一次真实请求验证路由补丁的判定 |
+| GET | `/api/dsh-workspace-sort/proxy/diagnostics` | 解析结果、补丁统计、最近判定记录 |
+
+浏览器半边的代理设置页是一个自包含的客户端模块（无构建步骤，React 通过浏览器模块表取得，不导入任何 `@deepseek-ai/dsh-client-*` 包），在 `settings.section` 槽位注册，通过上表这些接口读写配置。
+
+### 已知边界
+
+- 补丁按**主机名**判定，不是按「哪家 Provider 发的」。同进程里任何访问这些主机的请求都会走代理，同进程访问其它主机的请求都不会——这正是期望行为，但需要知道它不等同于「按 Provider 隔离」。
+- 隧道不对目标证书做二次校验（`requestTls.rejectUnauthorized: false`）。走私有 MITM 代理时这是必要的，代价是这一层不做证书校验。
+- 代理协议只支持 HTTP / HTTPS 代理，不支持 SOCKS。
+- 只影响模型请求。搜索、抓取网页、MCP 连接等其它网络流量默认直连，除非它们访问的主机被显式写进规则。
+
 ## 工作方式
 
 | 层 | 文件 | 作用 |
 | --- | --- | --- |
-| Host 半 | `lib/index.js` | 空入口，不注册服务、工具、路由与配置模式，只为让 Loader 拥有本包的装载行、从而让浏览器半被下发 |
-| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型；注入「修改」按钮与就地编辑框，并编排「停机 → 分岔 → 发送 → 切换 → 归档」五步 |
+| Host 半 | `lib/index.js` | 插件入口：装配 `fetch` 路由补丁、注册代理设置页的 HTTP 接口、声明装载行配置模式 |
+| Host 半 | `lib/proxy-core.js` | 纯路由判定与配置归一化，无 I/O，可独立测试 |
+| Host 半 | `lib/proxy-transport.js` | undici 解析、`ProxyAgent` 池、代理连通性探测、`fetch` 补丁 |
+| Host 半 | `lib/proxy-config.js` | 代理配置文档的原子读写 |
+| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行与 `settings.section` 代理设置页；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型；注入「修改」按钮与就地编辑框，并编排「停机 → 分岔 → 发送 → 切换 → 归档」五步 |
 | 清单 | `package.json` | `dsh.bundle.patch`（装载行）+ `dsh.client`（浏览器半）+ `exports["./client"]`，被 `dsh-client-modules` 扫描发现——无构建步骤，`lib/` 即产物 |
+| 清单 | `locale/{zh,en}.json` | 插件在插件列表里的中英文标题与描述 |
 
 ## 兼容性与已知边界
 
-- 在 **DSH 0.2.0-rc.2**（macOS 桌面端 + `dsh web`）上实测通过。排序与折叠只用 `slots` / `locale` / `workspaces` / `sessions` / `uiSession` 这几个客户端服务，并以此声明 `inject`。
+- 在 **DSH 0.2.0-rc.2**（macOS 桌面端 + `dsh web`）上实测通过。侧边栏只用 `slots` / `locale` / `workspaces` / `sessions` / `uiSession` 这几个客户端服务，并以此声明 `inject`；代理设置页只用 `slots` 与 `locale`，是这两个的子集。
 - 模型记忆额外需要 `uiWorkspace` 与 `remote.session`，它们**不在** `inject` 里声明，而是用 `ctx.inject` 延后挂载：缺哪个都只让这一项功能关闭（控制台打印 `... the per-Workspace model memory is off`），排序、折叠与设置行照常工作。
+- Host 半声明的 `inject` 只有 `webServer`。`llm` 服务是可选的，用 `ctx.get('llm')` 读取——读不到时设置页只列出内置 Provider 列表，不影响任何路由判定。缺 `undici` 时只打印一条警告并把设置页标成「宿主未接管 fetch」，请求全部直连，profile 照常启动。
 - 读服务一律走 `ctx.get(...)`，不用 `ctx.<服务名>`：Cordis 的 Context 是代理，读一个没在 `inject` 里声明的服务会**抛** `cannot get property "..." without inject`，而可选链 `?.` 挡不住抛出的取值器——一度因此让整个浏览器半挂载失败。
 - 拦截服务方法时按属性种类分别处理：远程命名空间（`RemoteNamespaceService.install`）把每个方法装成**只有 getter、没有 setter** 的自有访问器，而本包是**经典脚本**（非严格模式）——对它直接赋值会被**静默丢弃**，不报错。因此这种情况改为**包裹 getter**；原型方法（`uiWorkspace.connectWorkspace`）则用自有数据属性遮蔽。用错方式的表现是「插件挂载正常、设置行也在，但模型记忆完全不生效且毫无提示」。
 - 若宿主重装远程命名空间（`RemoteNamespaceService.remove()` 会删掉该包装），本插件的包装不会自动补挂；刷新窗口即可恢复。
@@ -165,14 +276,24 @@ DSH 原生只有一个全局的「上次所用模型」，新建会话永远套�
 - 「修改」功能依赖 `uiWorkspace`，它**不在** `inject` 里声明，而是用 `ctx.inject` 延后挂载：缺它只让这一项功能不挂载，排序、折叠、设置行照常工作。
 - 消息行的「修改」按钮在注入时**抄走同一个操作行里宿主按钮的 class**，因此它的尺寸、灰度和悬停态完全由宿主样式表决定，插件不再声明任何颜色或背景——一旦自己声明 `background`，就会因为 `!important` 压过宿主的 `:hover` 规则而让悬停失灵。插件只做一件事：`-webkit-appearance:none`，用来关掉 macOS 给裸 `<button>` 涂的 `buttonface`，那是宿主 reset 管不到插件注入节点的唯一一处。
 - 弹窗内的控件没有宿主 class 可抄，因此显式保持无底色、无边框、无阴影，悬停只换文字颜色。
+- 代理设置页的样式表只用 `--dsw-*` 主题 token 与版式数字，类名一律带 `dwsp-` 前缀，随组件卸载一并移除，不触碰组件树以外的 DOM。
+- 代理设置页注册在 `settings.section` 槽位（order 152，用量分组之下）。该槽位的类型由宿主的设置外壳声明，因此清单里的 `dsh.client.inject` 保留了 `@deepseek-ai/dsh-client-ui-settings` 与 `@deepseek-ai/dsh-client-ui-renderer`——它们决定激活顺序，本模块并不导入它们。
 
 ## 开发与验证
 
 ```bash
-node --test test/core.test.mjs     # 42 项单测
+npm test              # 111 项单测：侧边栏决策、会话改写、代理判定、宿主接口、代理端到端、代理设置页
+npm run test:cordis   # 真 Cordis 挂载校验
 ```
 
-单测覆盖三块：纯决策函数（条数折叠、排序、工作区移动计划、DOM 读行）、按工作区记忆模型的读写与归属判定，以及**按 Cordis 与 DSH 的真实形状挂载整个浏览器半**。上下文替身做到了三件事：读未声明的服务直接抛错、`ctx.get(...)` 答 `undefined`、`ctx.inject(deps, cb)` 只在依赖齐备时回调；`ctx.get` 返回**每次读取新建的跟踪代理**（`cordis.original` 可取回原服务）；`remote.session.selectModel` 装成**只有 getter 的访问器**、`uiWorkspace.connectWorkspace` 放在**原型**上。模型服务缺席时浏览器半仍须挂载成功并注册设置行，这条是针对挂载失败缺陷的回归测试；访问器那条是针对「赋值被静默丢弃」缺陷的回归测试。
+单测分六个文件：
+
+- `test/core.test.mjs` —— 纯决策函数（条数折叠、排序、工作区移动计划、DOM 读行），按工作区记忆模型的读写与归属判定，以及**按 Cordis 与 DSH 的真实形状挂载整个浏览器半**。上下文替身做到了三件事：读未声明的服务直接抛错、`ctx.get(...)` 答 `undefined`、`ctx.inject(deps, cb)` 只在依赖齐备时回调；`ctx.get` 返回**每次读取新建的跟踪代理**（`cordis.original` 可取回原服务）；`remote.session.selectModel` 装成**只有 getter 的访问器**、`uiWorkspace.connectWorkspace` 放在**原型**上。模型服务缺席时浏览器半仍须挂载成功并注册设置行，这条是针对挂载失败缺陷的回归测试；访问器那条是针对「赋值被静默丢弃」缺陷的回归测试。
+- `test/conversation-edit.test.mjs` —— 分岔改写历史输入的消息解析、切点计算与失败处理。
+- `test/proxy-core.test.mjs` —— 纯路由判定、主机模式匹配、配置归一化与容错。
+- `test/proxy-host.test.mjs` —— 宿主入口：六条路由的注册表与前缀、`fetch` 补丁装上与卸载后原样还原、保存即生效并归一化地址、永不代理的 Provider 在入口处就被拒、错误方法与坏请求体得到 405／400 而不是抛异常。配置文件写在系统临时目录下一个固定名下。
+- `test/proxy-routing.test.mjs` —— 起本地源站与本地代理，验证走代理的请求确实进了代理、直连的请求代理一条都没看到、关闭开关后恢复直连、`fetch` 补丁卸载后完整还原。`DSH_WORKSPACE_SORT_PROXY_UNDICI` 只在应用外跑测试、且自动解析找不到 undici 时需要，用来指认一份已安装的 undici。
+- `test/proxy-page.test.mjs` —— 用一个最小 React/hook 运行时驱动**真实产物**里的代理设置页，mock 掉宿主接口与主题。覆盖注册常量、zh/en 键位对齐、页面内不存在硬编码中文、校验与线格式、就绪／保存／重置／探测／失败各状态，以及样式表只用主题 token 且类名带 `dwsp-` 前缀。设 `DSH_THEME_TOKENS` 指向一份每行一个 `--dsw-*` token 的文件，还会核对样式表里的 token 是否都在该清单里。
 
 真 Cordis 端到端校验（自动从 `dsh` 命令或已安装位置找 Cordis，找不到就设 `DSH_CORDIS` 指向它的 `lib/index.js`）：
 
@@ -180,7 +301,7 @@ node --test test/core.test.mjs     # 42 项单测
 node test/cordis/run.mjs
 ```
 
-它把**真实浏览器半**挂到**真实 Cordis** 上，服务按出厂形状搭：远程命名空间的方法装成只有 getter 的自有访问器、`uiWorkspace.connectWorkspace` 放在原型上。单测里唯一剩下的替身（`inject` 同步回调、`effect` 普通回调）在这里被换成真实 fiber，因此它能抓到单测替身漏掉的问题——「赋值被静默丢弃」那个缺陷正是这样被它抓到的。
+它把**真实浏览器半**挂到**真实 Cordis** 上，服务按出厂形状搭：远程命名空间的方法装成只有 getter 的自有访问器、`uiWorkspace.connectWorkspace` 放在原型上，单测里唯一剩下的替身（`inject` 同步回调、`effect` 普通回调）在这里被换成真实 fiber，因此它能抓到单测替身漏掉的问题——「赋值被静默丢弃」那个缺陷正是这样被它抓到的。它同时核对两个槽位的注册契约：设置行注册进 `settings.general.item`，代理设置页注册进 `settings.section`，并带上正确的 id、locale 与本地化标题。
 
 真客户端校验（需要 3.x 以上 Chrome、一个已登录的 DSH Web 客户端与它的浏览器会话 cookie）：
 
@@ -195,7 +316,7 @@ DSH_COOKIE='dsh-auth-<hash>=v1.<payload>.<sig>' CDP_PORT=9333 node test/browser/
 - 桌面端：「插件」页里卸载，或先禁用。
 - Web 端：`dsh plugin --profile web remove <来源>`。
 
-工作区顺序已经写到 Host，卸载后仍保持卸载时的顺序。
+工作区顺序已经写到 Host，卸载后仍保持卸载时的顺序；代理配置文档留在 `$DSH_HOME/workspace-sort/proxy-config.json`，重新安装后继续生效。
 
 ## 许可
 

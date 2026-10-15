@@ -667,8 +667,9 @@ test('the Client half mounts with the model services absent and still registers 
 
   const { harness } = mount(fixture)
   try {
-    assert.equal(fixture.registrations.length, 1, 'the settings row is registered even without the model layer')
-    assert.equal(fixture.registrations[0].id, 'workspace-sort')
+    const byId = Object.fromEntries(fixture.registrations.map((entry) => [entry.id, entry]))
+    assert.ok(byId['workspace-sort'], 'the settings row is registered even without the model layer')
+    assert.ok(byId['llm-proxy'], 'the proxy-routing page is registered alongside the settings row')
     assert.deepEqual(
       harness.unavailable,
       ['uiWorkspace', 'remote.session', 'uiWorkspace'],
