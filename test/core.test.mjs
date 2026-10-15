@@ -669,7 +669,11 @@ test('the Client half mounts with the model services absent and still registers 
   try {
     assert.equal(fixture.registrations.length, 1, 'the settings row is registered even without the model layer')
     assert.equal(fixture.registrations[0].id, 'workspace-sort')
-    assert.deepEqual(harness.unavailable, ['uiWorkspace', 'remote.session'], 'the model layer is deferred, never awaited')
+    assert.deepEqual(
+      harness.unavailable,
+      ['uiWorkspace', 'remote.session', 'uiWorkspace'],
+      'each deferred service is requested by its own consumer, and none of them is awaited',
+    )
   } finally {
     harness.disposeAll()
   }

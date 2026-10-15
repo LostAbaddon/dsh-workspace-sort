@@ -1,8 +1,9 @@
 # dsh-workspace-sort
 
 DeepSeek Harness（DSH）侧边栏插件：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；并支持**每个工作区独立记忆模型与思考深度**，点击工作区的新会话按钮时自动使用该工作区上次所选的模型与思考深度作为默认项，而非全局上次所用模型。「单列表」模式保持 DSH 自己的排序，插件不干预。
+此外在每条用户消息的时间与复制之间加一个「修改」按钮：改写这条历史输入，插件会**分岔出新会话、发送改写后的输入、切换过去，并把原会话归档**，侧边栏里看起来就是同一个会话被就地改写了。
 
-> English: a DSH sidebar plugin. It orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable in Settings (default 5), and remembers the last selected model and thinking depth independently for each workspace so that clicking the workspace new-session button defaults to that workspace's own model rather than the global one. The single-list mode keeps DSH's own ordering.
+> English: a DSH sidebar plugin. It orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable in Settings (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original.
 
 ## 安装
 
@@ -116,12 +117,36 @@ DSH 原生只有一个全局的「上次所用模型」，新建会话永远套�
 
 > 已知副作用：DSH 的 `selectModel` 在服务端把「本会话的选择」和「全局默认」写在同一次调用里（`agentDefaultModel.saveSelection`，且不等它完成就返回）。因此套用工作区偏好时，全局默认也会跟着变成该工作区的模型。本插件不把全局默认改回去——那要经 `settings/update` 写 `agent-default-model` 条目，既需要条目命名空间与 revision，又会与上面那次「不等完成」的写入抢时序，得不偿失。工作区都没记录过时才会用到全局默认，实际影响只在「刚从有记录的工作区切到没记录的工作区」这一次。
 
+### 修改历史输入
+
+每条**你自己发的**消息，其下方操作行在「时间」与「复制」之间多一个**铅笔图标按钮**（与复制按钮同尺寸、同描边的宿主图标，悬停提示「修改这条输入，其后的对话将被替换」，屏幕阅读器读作「修改这条输入」）。
+
+1. 点「修改」，消息上方展开 Markdown 原文编辑框，预填的就是你当初发出去的内容。`Esc` 取消，`Cmd/Ctrl+Enter` 提交。
+2. 改完点「提交」，确认框写明**这条输入之后有几条对话会被移除**。
+3. 确认后依次完成四步：把当前回复停掉 → **分岔**一个新会话（切点在这条输入前一个事件）→ **把改写后的输入发进新会话**并执行 → **切换到新会话**，再把**原会话归档**。
+
+结果：侧边栏里原会话的位置上出现的是新会话，里面是「历史前缀 + 修改后的输入 + 新回答」。原会话只是**归档**，随时可以从「显示已归档」里找回来。
+
+**为什么是归档而不是删除**：DSH 的会话持久层是只追加的（契约原文 "events are contiguous from seq 0 and never rewritten"），Host 也没有任何删除单个会话的接口——`workspaceRegistry.delete` 删的是工作区，会话层面只有 `archiveSession`。归档是可逆的，删除不可逆。
+
+**被归档的内容仍然完整留在磁盘上**（`~/.dsh/sessions/<工作区>/<会话>/session.jsonl.zstd`），也仍能被会话搜索与导出查到。
+
+### 被拒绝的几种情况
+
+- 目标不是你自己发的消息（注入上下文等）。
+- 目标已经是当前加载窗口里看不到的更早事件——先往下滚动把它加载出来。
+- 会话的第一条消息，前面没有可保留的历史。
+- 当前回复停不下来（15 秒内没能进入空闲）。
+- 分岔失败、或改写后的输入没能送进新会话。后者会把刚分岔出来的空会话一并归档，不留孤儿。
+
+失败时编辑框里显示具体原因，已完成的部分不会静默留在原地。
+
 ## 工作方式
 
 | 层 | 文件 | 作用 |
 | --- | --- | --- |
 | Host 半 | `lib/index.js` | 空入口，不注册服务、工具、路由与配置模式，只为让 Loader 拥有本包的装载行、从而让浏览器半被下发 |
-| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型 |
+| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型；注入「修改」按钮与就地编辑框，并编排「停机 → 分岔 → 发送 → 切换 → 归档」五步 |
 | 清单 | `package.json` | `dsh.bundle.patch`（装载行）+ `dsh.client`（浏览器半）+ `exports["./client"]`，被 `dsh-client-modules` 扫描发现——无构建步骤，`lib/` 即产物 |
 
 ## 兼容性与已知边界
@@ -135,6 +160,11 @@ DSH 原生只有一个全局的「上次所用模型」，新建会话永远套�
 - 条数折叠依赖侧边栏自身的 DOM 约定：分组节点 class 以 `_groupSection` 结尾，行与展开控件带 `data-row-key="session:<id>" / "overflow:<key>"`。DSH 若改名，排序照常工作，折叠会静默失效；启动时控制台会打印 `[dsh-workspace-sort] mounted: ...` 便于判断。
 - 排序取会话列表的 `updatedAt`，所以在一个工作区里对话会让它跳到最前——这是预期行为。
 - 插件不改变会话在工作区**内部**的排序，那部分由 DSH 自己的「最后更新 / 手动」选项负责。
+- 修改历史输入依赖三处宿主约定：`data-chat-node-key` 的格式（`${kind.length}:${kind}${id}`，据此从 DOM 反解消息 id）、用户消息操作行的第一个 `button` 就是复制按钮、以及会话事件窗口能读到目标消息。DSH 若改其中任一处，修改按钮会静默不出现，侧边栏功能不受影响。
+- 分岔的切点取「目标消息的前一个 seq」。会话 seq 从 0 连续，所以这个切点**永远是真实存在的事件**，与客户端加载了多少历史无关。切点落在目标消息所属回合的内部，宿主会在分岔时补上合成的回合与工具闭合事件。
+- 「修改」功能依赖 `uiWorkspace`，它**不在** `inject` 里声明，而是用 `ctx.inject` 延后挂载：缺它只让这一项功能不挂载，排序、折叠、设置行照常工作。
+- 消息行的「修改」按钮在注入时**抄走同一个操作行里宿主按钮的 class**，因此它的尺寸、灰度和悬停态完全由宿主样式表决定，插件不再声明任何颜色或背景——一旦自己声明 `background`，就会因为 `!important` 压过宿主的 `:hover` 规则而让悬停失灵。插件只做一件事：`-webkit-appearance:none`，用来关掉 macOS 给裸 `<button>` 涂的 `buttonface`，那是宿主 reset 管不到插件注入节点的唯一一处。
+- 弹窗内的控件没有宿主 class 可抄，因此显式保持无底色、无边框、无阴影，悬停只换文字颜色。
 
 ## 开发与验证
 
