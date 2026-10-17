@@ -937,3 +937,229 @@ test('long prose wraps instead of overflowing the column', () => {
     assert.match(rule(selector), /overflow-wrap:anywhere/, `${selector} may break inside a word`)
   }
 })
+
+// ------------------------------------------------- conversations that appear
+//
+// The new-session call is the precise trigger, but it is not the only way a
+// conversation can start: a Session can also simply appear in the list. These
+// tests drive that second path, which is what keeps the feature alive when the
+// Host routes "new conversation" somewhere else.
+
+/**
+ * A Client double whose Session list grows while the half is mounted.
+ * `uiWorkspace.connectWorkspace` creates the conversation the way the shipped
+ * one does, so both triggers can be exercised against one fixture.
+ */
+function appearingSessionFixture() {
+  const registrations = []
+  const seen = []
+  const listeners = new Set()
+  const byId = {
+    'sess-coder': { id: 'sess-coder', cwd: '/ws/coder', blank: false },
+    'sess-writer': { id: 'sess-writer', cwd: '/ws/writer', blank: false },
+  }
+  let ids = ['sess-coder', 'sess-writer']
+  const workspaces = [
+    { workspaceId: 'ws-coder', sessionIds: ['sess-coder'], path: '/ws/coder' },
+    { workspaceId: 'ws-writer', sessionIds: ['sess-writer'], path: '/ws/writer' },
+  ]
+
+  /** Publish one Session that appeared, optionally already a Workspace member. */
+  const appear = (id, { cwd, blank = true, member = null }) => {
+    byId[id] = { id, cwd, blank }
+    ids = [...ids, id]
+    if (member !== null) {
+      const workspace = workspaces.find((entry) => entry.workspaceId === member)
+      if (workspace !== undefined && !workspace.sessionIds.includes(id)) {
+        workspace.sessionIds = [...workspace.sessionIds, id]
+      }
+    }
+    for (const listener of [...listeners]) listener()
+  }
+
+  const remoteSession = remoteNamespace({
+    selectModel(request) {
+      seen.push(request)
+      return { ok: true, value: { selected: { provider: request.provider, model: request.model } } }
+    },
+  })
+  const uiWorkspace = Object.create({
+    async connectWorkspace(workspaceId) {
+      appear('sess-created', { cwd: '/ws/coder', member: workspaceId })
+      return 'sess-created'
+    },
+  })
+
+  const services = {
+    workspaces: {
+      list: { getSnapshot: () => ({ phase: 'ready', items: workspaces, archivedSessionIds: [] }), subscribe: () => () => {} },
+      insertBefore: async () => {},
+    },
+    sessions: {
+      list: {
+        getSnapshot: () => ({ byId, ids, phase: 'ready', projectionsBySession: {} }),
+        subscribe: (listener) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+      },
+    },
+    uiSession: { sessionStatus: { getSnapshot: () => new Map() } },
+    slots: {
+      inject: (_key, callback) => callback(),
+      register: (definition) => {
+        registrations.push(definition)
+        return () => {}
+      },
+    },
+    locale: { register: () => () => {}, bind: () => (key) => key },
+    'remote.session': remoteSession,
+    uiWorkspace,
+  }
+  return { services, seen, byId, workspaces, appear }
+}
+
+/** Seed the per-Workspace store the plugin reads. */
+const seedRememberedModel = (entries) => (storage) => {
+  storage.setItem('dsh.workspace-models.v1', JSON.stringify(entries))
+}
+
+const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms))
+
+test('a conversation that appears while mounted adopts its Workspace model', async () => {
+  const fixture = appearingSessionFixture()
+  const { harness } = mount(fixture, seedRememberedModel({
+    'ws-coder': { provider: 'anthropic', model: 'claude-3-5-sonnet', reasoningEffort: 'high' },
+  }))
+  try {
+    fixture.appear('sess-new', { cwd: '/ws/coder', member: 'ws-coder' })
+    await settle()
+    await settle()
+    assert.deepEqual(fixture.seen, [{
+      sessionId: 'sess-new',
+      provider: 'anthropic',
+      model: 'claude-3-5-sonnet',
+      reasoningEffort: 'high',
+    }], 'the appearing conversation carries its Workspace choice without the new-session call')
+  } finally {
+    harness.disposeAll()
+  }
+})
+
+test('a conversation that appears without a remembered Workspace keeps the default', async () => {
+  const fixture = appearingSessionFixture()
+  const { harness } = mount(fixture, seedRememberedModel({}))
+  try {
+    fixture.appear('sess-new', { cwd: '/ws/writer', member: 'ws-writer' })
+    await settle()
+    assert.deepEqual(fixture.seen, [])
+  } finally {
+    harness.disposeAll()
+  }
+})
+
+test('both triggers together apply one remembered choice exactly once', async () => {
+  const fixture = appearingSessionFixture()
+  const { harness } = mount(fixture, seedRememberedModel({
+    'ws-coder': { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+  }))
+  try {
+    const sessionId = await harness.ctx.get('uiWorkspace').connectWorkspace('ws-coder')
+    await settle()
+    await settle()
+    assert.equal(sessionId, 'sess-created')
+    assert.equal(fixture.seen.length, 1, 'the same Session is never re-targeted twice')
+    assert.equal(fixture.seen[0].sessionId, 'sess-created')
+  } finally {
+    harness.disposeAll()
+  }
+})
+
+test('a conversation that a started chat already touched is left alone', async () => {
+  const fixture = appearingSessionFixture()
+  const { harness } = mount(fixture, seedRememberedModel({
+    'ws-coder': { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+  }))
+  try {
+    fixture.appear('sess-live', { cwd: '/ws/coder', blank: false, member: 'ws-coder' })
+    await settle()
+    assert.deepEqual(fixture.seen, [], 'a conversation with messages keeps its own model')
+  } finally {
+    harness.disposeAll()
+  }
+})
+
+test('a conversation whose Workspace cannot be told apart is never guessed', async () => {
+  const fixture = appearingSessionFixture()
+  // A second Workspace on the same directory, so the path cannot decide it.
+  fixture.workspaces.push({ workspaceId: 'ws-coder-fork', sessionIds: [], path: '/ws/coder' })
+  const { harness } = mount(fixture, seedRememberedModel({
+    'ws-coder': { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+    'ws-coder-fork': { provider: 'openai', model: 'gpt-5' },
+  }))
+  try {
+    fixture.appear('sess-orphan', { cwd: '/ws/coder' })
+    await settle()
+    await settle(600)
+    assert.deepEqual(fixture.seen, [], 'an ambiguous owner is skipped rather than guessed')
+  } finally {
+    harness.disposeAll()
+  }
+})
+
+test('a conversation that appears later is matched once membership arrives', async () => {
+  const fixture = appearingSessionFixture()
+  const { harness } = mount(fixture, seedRememberedModel({
+    'ws-coder': { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+  }))
+  try {
+    // Appears before its Workspace lists it; stays resolvable by path, which is
+    // unique here, so the retry has nothing extra to learn — but the first pass
+    // must still produce exactly one application.
+    fixture.appear('sess-late', { cwd: '/ws/coder' })
+    await settle()
+    await settle(600)
+    assert.equal(fixture.seen.length, 1)
+    assert.equal(fixture.seen[0].sessionId, 'sess-late')
+  } finally {
+    harness.disposeAll()
+  }
+})
+
+test('a Session list that loads late is not mistaken for new conversations', async () => {
+  const fixture = appearingSessionFixture()
+  // Start with a list that has not loaded yet.
+  const live = { byId: {}, ids: [], phase: 'pending', projectionsBySession: {} }
+  const listeners = new Set()
+  fixture.services.sessions.list = {
+    getSnapshot: () => live,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+  }
+  const { harness } = mount(fixture, seedRememberedModel({
+    'ws-coder': { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+  }))
+  try {
+    // The first fill brings the pre-existing conversations, all blank ones included.
+    live.phase = 'ready'
+    live.byId = { 'sess-old': { id: 'sess-old', cwd: '/ws/coder', blank: true } }
+    live.ids = ['sess-old']
+    for (const listener of [...listeners]) listener()
+    await settle()
+    assert.deepEqual(fixture.seen, [], 'the first fill is the baseline, not a burst of new conversations')
+
+    // Only what appears afterwards counts.
+    live.byId['sess-new'] = { id: 'sess-new', cwd: '/ws/coder', blank: true }
+    live.ids = [...live.ids, 'sess-new']
+    fixture.workspaces[0].sessionIds = [...fixture.workspaces[0].sessionIds, 'sess-new']
+    for (const listener of [...listeners]) listener()
+    await settle()
+    await settle()
+    assert.equal(fixture.seen.length, 1)
+    assert.equal(fixture.seen[0].sessionId, 'sess-new')
+  } finally {
+    harness.disposeAll()
+  }
+})

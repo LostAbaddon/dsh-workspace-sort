@@ -4,9 +4,9 @@ DeepSeek Harness（DSH）插件，两组能力装在一个包里。
 
 **侧边栏**：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；**每个工作区独立记忆模型与思考深度**，点工作区的新会话按钮时自动套用该工作区上次的选择。「单列表」模式保持 DSH 自己的排序，插件不干预。每条用户消息的时间与复制之间还有一个「修改」按钮：改写这条历史输入，插件会**分岔出新会话、发送改写后的输入、切换过去，并把原会话归档**。
 
-**模型请求的出口**：按 Provider 决定 DSH 的模型请求走不走代理——需要翻墙才能访问的 Provider（Gemini、OpenRouter 等）走代理，国内可直连的 Provider（DeepSeek、Kimi、MiniMax、GLM 等）保持直连。代理地址与「哪些 Provider 走代理」都在 DSH 的设置页里配置，保存即生效、不用重启。
+**模型请求的出口**：按 Provider 决定 DSH 的模型请求走不走代理——需要翻墙才能访问的 Provider（Gemini、OpenRouter、Agnes 等）走代理，国内可直连的 Provider（DeepSeek、Kimi、MiniMax、GLM 等）保持直连。代理地址与「哪些 Provider 走代理」都在 DSH 的设置页里配置，保存即生效、不用重启。
 
-> English: a DSH plugin with two halves. In the sidebar it orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original. On the network path it decides per provider whether LLM requests reach the network through a proxy — Gemini and OpenRouter through it, DeepSeek, Kimi, MiniMax and GLM straight out — with the proxy URL and the provider rules configured on a Settings page that applies on save.
+> English: a DSH plugin with two halves. In the sidebar it orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original. On the network path it decides per provider whether LLM requests reach the network through a proxy — Gemini, OpenRouter and Agnes through it, DeepSeek, Kimi, MiniMax and GLM straight out — with the proxy URL and the provider rules configured on a Settings page that applies on save.
 
 ## 安装
 
@@ -164,7 +164,7 @@ DSH 里同时挂了很多家模型。把代理塞进进程环境变量（`HTTPS_
 
 主机规则来自两处，按顺序拼接：
 
-- **Provider 行**：勾选「走代理」的 Provider 自带一组主机名。例如 Gemini 是 `generativelanguage.googleapis.com`，OpenRouter 是 `openrouter.ai` 与 `*.openrouter.ai`。每行还可以追加自定义主机名（内网网关、自建反代）。
+- **Provider 行**：勾选「走代理」的 Provider 自带一组主机名。例如 Gemini 是 `generativelanguage.googleapis.com`，OpenRouter 是 `openrouter.ai` 与 `*.openrouter.ai`，Agnes 是 `apihub.agnes-ai.com`（对应其 `https://apihub.agnes-ai.com/v1` 接口）。每行还可以追加自定义主机名（内网网关、自建反代）。
 - **额外主机规则**：与 Provider 无关的独立主机名条目，支持 `*` 通配。
 
 主机名支持三种写法：精确匹配 `api.openai.com`；子域通配 `*.openrouter.ai`（不匹配裸域）；全通配 `*`。

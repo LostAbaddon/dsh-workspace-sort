@@ -150,6 +150,11 @@ test('state reports the configuration, the provider catalog and the runtime', as
     assert.equal(typeof payload.runtime.requests, 'number')
     assert.ok(Array.isArray(payload.effectiveHosts))
 
+    const agnes = payload.providers.find((row) => row.id === 'agnes')
+    assert.ok(agnes, 'Agnes is offered as a built-in row')
+    assert.equal(agnes.displayName, 'Agnes')
+    assert.deepEqual(agnes.hosts, ['apihub.agnes-ai.com'])
+
     const gemini = payload.providers.find((row) => row.id === 'gemini')
     assert.ok(gemini, 'the built-in catalog reaches the page even with no llm service')
     assert.ok(gemini.hosts.includes('generativelanguage.googleapis.com'))

@@ -170,3 +170,27 @@ test('normalizeConfig tolerates malformed input', () => {
   ])
   assert.deepEqual(normalizeConfig(null), { enabled: false, proxyUrl: '', providers: {}, hosts: [] })
 })
+
+test('agnes is a first-class provider with its own host', () => {
+  assert.deepEqual(providerHosts('agnes', configWith({})), ['apihub.agnes-ai.com'])
+  assert.equal(DEFAULT_ENABLED_PROVIDERS.includes('agnes'), true, 'a foreign aggregator belongs to the proxied set')
+  assert.equal(NEVER_PROXY.has('agnes'), false)
+})
+
+test('an agnes endpoint is routed once its row is on', () => {
+  const config = configWith({ providers: { agnes: { enabled: true } } })
+  const decision = decideRoute('https://apihub.agnes-ai.com/v1/chat/completions', config)
+  assert.equal(decision.proxy, true)
+  assert.equal(decision.proxyUrl, PROXY)
+  assert.equal(decision.matchedBy, 'apihub.agnes-ai.com')
+})
+
+test('agnes starts enabled in the configuration a fresh install gets', () => {
+  const config = defaultConfig()
+  assert.equal(config.providers.agnes?.enabled, true)
+})
+
+test('the agnes host is listed for the settings page count', () => {
+  const config = configWith({ providers: { agnes: { enabled: true } } })
+  assert.deepEqual(effectiveHosts(config), ['apihub.agnes-ai.com'])
+})
