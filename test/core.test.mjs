@@ -51,6 +51,8 @@ const {
   interceptMethod,
   WORKSPACE_MODELS_KEY,
   SETTINGS_KEY,
+  SETTINGS_CSS,
+  STYLE_ID,
   normalizeModelPreference,
   loadWorkspaceModels,
   saveWorkspaceModels,
@@ -876,4 +878,62 @@ test('disposing the Client half puts both intercepted methods back', () => {
     undefined,
     'the prototype method is un-shadowed again',
   )
+})
+
+// ------------------------------------------------------------ settings row layout
+//
+// The row lives inside the host's 通用设置 column, whose width is whatever the
+// settings panel happens to be. It used to be a plain non-wrapping flex row with
+// `flex:none` on the controls: in a narrow panel the controls kept their full
+// intrinsic width and the text — `min-width:0` with no basis — absorbed the whole
+// shortfall, collapsing the description into a one-character-wide column. These
+// assertions pin the layout that keeps that from happening again.
+
+/** One rule of the row stylesheet, by exact selector. */
+const rule = (selector) => {
+  const match = SETTINGS_CSS.match(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\{([^}]*)\\}`))
+  return match === null ? null : match[1]
+}
+
+test('the settings row stylesheet is keyed like a shipped bundle', () => {
+  assert.equal(STYLE_ID, 'dsh-workspace-sort/settings-row.css')
+  assert.ok(SETTINGS_CSS.includes('.dws-row{'))
+})
+
+test('the row wraps instead of squeezing its text', () => {
+  const row = rule('.dws-row')
+  assert.ok(row !== null, '.dws-row is declared')
+  assert.match(row, /display:flex/)
+  assert.match(row, /flex-wrap:wrap/, 'a narrow panel moves the controls to their own line')
+  assert.doesNotMatch(row, /flex-wrap:nowrap/)
+})
+
+test('the text column keeps a flex basis so it cannot collapse to zero', () => {
+  const text = rule('.dws-text')
+  assert.ok(text !== null, '.dws-text is declared')
+  assert.match(text, /flex:1 1 \d+px/, 'grow, shrink, and a non-zero basis')
+  assert.match(text, /min-width:0/, 'long unbroken words still wrap rather than overflow')
+})
+
+test('the controls shrink and wrap rather than starving the text', () => {
+  const controls = rule('.dws-controls')
+  assert.ok(controls !== null, '.dws-controls is declared')
+  assert.match(controls, /display:flex/)
+  assert.match(controls, /flex-wrap:wrap/)
+  assert.doesNotMatch(controls, /flex:none/, 'the controls no longer claim an unshrinkable width')
+})
+
+test('a control label never breaks in the middle of its own text', () => {
+  for (const selector of ['.dws-field', '.dws-toggle']) {
+    const declaration = rule(selector)
+    assert.ok(declaration !== null, `${selector} is declared`)
+    assert.match(declaration, /white-space:nowrap/, `${selector} keeps its label on one line`)
+    assert.match(declaration, /flex:none/, `${selector} keeps its intrinsic width`)
+  }
+})
+
+test('long prose wraps instead of overflowing the column', () => {
+  for (const selector of ['.dws-description', '.dws-hint']) {
+    assert.match(rule(selector), /overflow-wrap:anywhere/, `${selector} may break inside a word`)
+  }
 })
