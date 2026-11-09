@@ -177,15 +177,25 @@ console.info = info
 const checks = []
 const check = (label, ok) => checks.push([label, ok === true])
 
-const registered = new Map(registrations.map((entry) => [entry.name, entry]))
-check('the Client half mounts and registers its settings row', registered.has('settings.general.item'))
-check('the Client half registers the proxy-routing page', registered.has('settings.section'))
+const byName = (name) => registrations.filter((entry) => entry.name === name)
+const sections = byName('settings.section')
+const proxy = sections.find((entry) => entry.id === 'llm-proxy')
+const panels = sections.find((entry) => entry.id === 'sidebar-panels')
+const actions = byName('sidebar.panellist.actions').find((entry) => entry.id === 'workspace-sort-panels')
+check('the Client half mounts and registers its settings row', byName('settings.general.item').length === 1)
+check('the Client half registers the proxy-routing page', proxy !== undefined)
+check('the Client half registers the sidebar-panels page', panels !== undefined)
 
-const proxy = registered.get('settings.section')
 check('the proxy page sits under the first-level settings sections', proxy?.id === 'llm-proxy')
 check('the proxy page declares its own locale namespace', proxy?.locale === 'workspaceSortProxy')
 check('the proxy page nav label is the localized title', proxy?.label?.() === '代理路由')
 check('the proxy page renders through a component', typeof proxy?.component === 'function')
+
+check('the panels page declares its own locale namespace', panels?.locale === 'workspaceSortPanels')
+check('the panels page nav label is the localized title', panels?.label?.() === '侧边栏面板')
+check('the panels page renders through a component', typeof panels?.component === 'function')
+check('the panel More-menu rows register with a negative order', actions?.order === -10)
+check('the panel More-menu rows render through a component', typeof actions?.component === 'function')
 
 check('the remote method is still an accessor after interception', Object.getOwnPropertyDescriptor(namespace, 'selectModel')?.get !== undefined)
 

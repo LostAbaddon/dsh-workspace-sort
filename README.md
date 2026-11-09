@@ -2,11 +2,11 @@
 
 DeepSeek Harness（DSH）插件，两组能力装在一个包里。
 
-**侧边栏**：在「按工作区」和「按工作区树」两种分组方式下，把工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；**每个工作区独立记忆模型与思考深度**，点工作区的新会话按钮时自动套用该工作区上次的选择。「单列表」模式保持 DSH 自己的排序，插件不干预。每条用户消息的时间与复制之间还有一个「修改」按钮：改写这条历史输入，插件会**分岔出新会话、发送改写后的输入、切换过去，并把原会话归档**。
+**侧边栏**：全局面板图标（插件、任务看板、智能体等）超过设定数量时，按自定义顺序保留前 N 个，其余收进「更多」；长按图标约 0.4 秒后拖动即可改写顺序。在「按工作区」和「按工作区树」两种分组方式下，工作区按其中**最新一条对话的时间戳降序**排列；每个工作区**显示多少条对话**可在设置里改（系统默认 5 条）；**每个工作区独立记忆模型与思考深度**，点工作区的新会话按钮时自动套用该工作区上次的选择。「单列表」模式保持 DSH 自己的排序，插件不干预。每条用户消息的时间与复制之间还有一个「修改」按钮：改写这条历史输入，插件会**分岔出新会话、发送改写后的输入、切换过去，并把原会话归档**。
 
 **模型请求的出口**：按 Provider 决定 DSH 的模型请求走不走代理——需要翻墙才能访问的 Provider（Gemini、OpenRouter、Agnes 等）走代理，国内可直连的 Provider（DeepSeek、Kimi、MiniMax、GLM 等）保持直连。代理地址与「哪些 Provider 走代理」都在 DSH 的设置页里配置，保存即生效、不用重启。
 
-> English: a DSH plugin with two halves. In the sidebar it orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original. On the network path it decides per provider whether LLM requests reach the network through a proxy — Gemini, OpenRouter and Agnes through it, DeepSeek, Kimi, MiniMax and GLM straight out — with the proxy URL and the provider rules configured on a Settings page that applies on save.
+> English: a DSH plugin with two halves. In the sidebar it folds the global panel icons (Plugins, Task Board, Agents, …) behind the host's More menu once they exceed a configurable count, keeps the first N in a user-defined order, and lets a long-press drag rewrite that order; it also orders Workspaces (Workspace and Workspace-Tree grouping) by their newest conversation, makes the per-Workspace visible conversation count configurable (default 5), remembers the last selected model and thinking depth independently for each workspace, and adds an Edit button between the timestamp and the copy button of every user message that forks a corrected conversation, sends the rewritten input, switches to it, and archives the original. On the network path it decides per provider whether LLM requests reach the network through a proxy — Gemini, OpenRouter and Agnes through it, DeepSeek, Kimi, MiniMax and GLM straight out — with the proxy URL and the provider rules configured on a Settings page that applies on save.
 
 ## 安装
 
@@ -103,9 +103,26 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 - 顺序通过 Host 的工作区顺序（`insertBefore`）落地，因此刷新、重开、换客户端都保持；代价是手动拖动工作区分组后，下一次重新排序会把它拨回按时间戳的顺序——需要固定顺序时关掉开关。
 - 「单列表」模式不下发任何排序写入。
 
+### 全局面板折叠与拖拽排序
+
+「插件」「任务看板」「智能体」这一排图标由 `sidebar.panellist` 槽位的注册项渲染。面板数超过设定上限时，插件按自定义顺序保留前 N 个，其余收进侧边栏的「更多」；**当前打开的面板**即使排在上限之外也保持显示。
+
+设置 → **侧边栏面板**：
+
+| 控件 | 默认 | 作用 |
+| --- | --- | --- |
+| 启用面板折叠 | 开 | 关掉后侧栏恢复显示全部面板，顺序与勾选会保留 |
+| 最多显示 | 6 | 自动模式下保留的面板数（1~32） |
+| 折叠方式 | 按顺序 | **自动**：按顺序保留前 N 个，其余收进「更多」；**手动**：只显示勾选的面板，不受数量上限约束 |
+| 顺序与显示 | — | 每个面板的上下移动按钮与勾选框；顺序决定自动模式保留哪几个 |
+
+**长按拖动**：在侧边栏按住任一图标约 0.4 秒后拖动，拖到目标位置松手即可。**长按后松手不移动**会进入排序模式：所有面板（含已折叠的）临时展开，列表末尾出现「完成排序」，这时可以把折叠中的面板拖到前面，也可以继续调整其它面板；点「完成排序」、按 Esc 或点侧栏以外退出，折叠按新顺序立即恢复。顺序写入本地偏好在下次启动继续生效；普通单击的含义不变。
+
+**「更多」菜单**：DSH 0.2.2 及以后由宿主在面板行之后渲染「更多」，本插件把收起的条目作为该菜单的前几行列出，点一下直接切到那个面板；宿主原有的「浏览更多插件」「创建你的插件」保持在其后。宿主的「插件」管理入口始终显示（与宿主自身的固定规则一致），不参与折叠，也不出现在「更多」里。宿主没有这个入口的版本上，插件自己在面板列表末尾挂一个「更多面板（N）」触发器，点开是同一份折叠列表。
+
 ### 偏好存放位置
 
-三个设置项存在**浏览器本地**（`localStorage` 的 `dsh.workspace-sort.v1`），与 DSH 自己的视图选项 `dsh.workspace.view.v5`（分组方式 / 手动排序）同层同寿命：同一 profile 下，桌面窗口与各浏览器标签各自独立。每个工作区记住的模型存在同层的 `dsh.workspace-models.v1`。工作区顺序的写入是 **Host 级**的，同一 profile 内所有客户端共享。
+3 个设置项存在**浏览器本地**（`localStorage` 的 `dsh.workspace-sort.v1`），与 DSH 自己的视图选项 `dsh.workspace.view.v5`（分组方式 / 手动排序）同层同寿命：同一 profile 下，桌面窗口与各浏览器标签各自独立。每个工作区记住的模型存在同层的 `dsh.workspace-models.v1`。面板折叠、顺序与勾选存在同层的 `dsh.workspace-sort.panels.v1`。工作区顺序的写入是 **Host 级**的，同一 profile 内所有客户端共享。
 
 ### 每个工作区独立的模型与思考深度
 
@@ -255,13 +272,13 @@ Host 暴露的接口（供设置页与诊断使用）：
 | Host 半 | `lib/proxy-core.js` | 纯路由判定与配置归一化，无 I/O，可独立测试 |
 | Host 半 | `lib/proxy-transport.js` | undici 解析、`ProxyAgent` 池、代理连通性探测、`fetch` 补丁 |
 | Host 半 | `lib/proxy-config.js` | 代理配置文档的原子读写 |
-| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行与 `settings.section` 代理设置页；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型；注入「修改」按钮与就地编辑框，并编排「停机 → 分岔 → 发送 → 切换 → 归档」五步 |
+| 浏览器半 | `lib/client.js` | 注册 `settings.general.item` 设置行、代理设置页与「侧边栏面板」设置页；给已渲染的全局面板行打标记，按设置折叠溢出项并用 CSS `order` 落地自定义顺序，长按拖动改写顺序，同时向宿主「更多」菜单提供折叠项；订阅工作区与会话快照，按最新对话时间戳计算目标顺序并调用 `ctx.get('workspaces').insertBefore` 逐项落地；对已渲染的侧边栏做条数折叠；拦截 `remote.session.selectModel` 与 `uiWorkspace.connectWorkspace` 实现按工作区记忆模型；注入「修改」按钮与就地编辑框，并编排「停机 → 分岔 → 发送 → 切换 → 归档」五步 |
 | 清单 | `package.json` | `dsh.bundle.patch`（装载行）+ `dsh.client`（浏览器半）+ `exports["./client"]`，被 `dsh-client-modules` 扫描发现——无构建步骤，`lib/` 即产物 |
 | 清单 | `locale/{zh,en}.json` | 插件在插件列表里的中英文标题与描述 |
 
 ## 兼容性与已知边界
 
-- 在 **DSH 0.2.0-rc.2**（macOS 桌面端 + `dsh web`）上实测通过。侧边栏只用 `slots` / `locale` / `workspaces` / `sessions` / `uiSession` 这几个客户端服务，并以此声明 `inject`；代理设置页只用 `slots` 与 `locale`，是这两个的子集。
+- 既有功能在 **DSH 0.2.0-rc.2**（macOS 桌面端 + `dsh web`）上实测通过。面板折叠与拖拽在 **0.2.2-rc.1** 桌面端实测通过：折叠项走宿主自己的「更多」菜单，长按进入排序模式与真实拖动都完整验证；0.2.0 的降级触发器路径由 `test/panels-dom.test.mjs` 覆盖。侧边栏只用 `slots` / `locale` / `workspaces` / `sessions` / `uiSession` 这几个客户端服务，并以此声明 `inject`；面板弹出层读 `layout` 时用 `ctx.get`，不列为硬依赖。代理设置页只用 `slots` 与 `locale`，是这两个的子集。
 - 模型记忆额外需要 `uiWorkspace` 与 `remote.session`，它们**不在** `inject` 里声明，而是用 `ctx.inject` 延后挂载：缺哪个都只让这一项功能关闭（控制台打印 `... the per-Workspace model memory is off`），排序、折叠与设置行照常工作。
 - Host 半声明的 `inject` 只有 `webServer`。`llm` 服务是可选的，用 `ctx.get('llm')` 读取——读不到时设置页只列出内置 Provider 列表，不影响任何路由判定。缺 `undici` 时只打印一条警告并把设置页标成「宿主未接管 fetch」，请求全部直连，profile 照常启动。
 - 读服务一律走 `ctx.get(...)`，不用 `ctx.<服务名>`：Cordis 的 Context 是代理，读一个没在 `inject` 里声明的服务会**抛** `cannot get property "..." without inject`，而可选链 `?.` 挡不住抛出的取值器——一度因此让整个浏览器半挂载失败。
@@ -274,6 +291,10 @@ Host 暴露的接口（供设置页与诊断使用）：
 - 修改历史输入依赖三处宿主约定：`data-chat-node-key` 的格式（`${kind.length}:${kind}${id}`，据此从 DOM 反解消息 id）、用户消息操作行的第一个 `button` 就是复制按钮、以及会话事件窗口能读到目标消息。DSH 若改其中任一处，修改按钮会静默不出现，侧边栏功能不受影响。
 - 分岔的切点取「目标消息的前一个 seq」。会话 seq 从 0 连续，所以这个切点**永远是真实存在的事件**，与客户端加载了多少历史无关。切点落在目标消息所属回合的内部，宿主会在分岔时补上合成的回合与工具闭合事件。
 - 「修改」功能依赖 `uiWorkspace`，它**不在** `inject` 里声明，而是用 `ctx.inject` 延后挂载：缺它只让这一项功能不挂载，排序、折叠、设置行照常工作。
+- 面板折叠依赖侧边栏的 3 个宿主约定：全局面板行位于一个 `nav` 内、每行是带 `aria-label` 的 `button`、选中行带 `aria-current="page"`。DSH 若改结构，折叠会**失败开放**（一行都不隐藏）并在控制台告警一次，其它功能照常。
+- 顺序用 flex 的 CSS `order` 落地，不移动宿主的 React 节点，因此拖拽不会与 React 的重渲染抢 DOM；代价是**键盘 Tab 顺序仍按宿主的 DOM 顺序**，与视觉顺序可能不同。折叠只是 `display:none`，主面板注册与当前选中态不受影响。
+- DSH 0.2.2 起宿主提供 `sidebar.panellist.actions` 与面板行之后的「更多」按钮，插件把折叠项注册为该菜单的菜单行；没有该槽位的版本上，插件在面板列表末尾自建「更多面板（N）」触发器与弹层。宿主菜单插槽缺失不会让页面启动失败。
+- 「侧边栏面板」设置页注册在 `settings.section`（order 153，代理路由之后），样式只用 `--dsw-*` 主题 token，类名一律带 `dwsn-` 前缀。
 - 消息行的「修改」按钮在注入时**抄走同一个操作行里宿主按钮的 class**，因此它的尺寸、灰度和悬停态完全由宿主样式表决定，插件不再声明任何颜色或背景——一旦自己声明 `background`，就会因为 `!important` 压过宿主的 `:hover` 规则而让悬停失灵。插件只做一件事：`-webkit-appearance:none`，用来关掉 macOS 给裸 `<button>` 涂的 `buttonface`，那是宿主 reset 管不到插件注入节点的唯一一处。
 - 弹窗内的控件没有宿主 class 可抄，因此显式保持无底色、无边框、无阴影，悬停只换文字颜色。
 - 代理设置页的样式表只用 `--dsw-*` 主题 token 与版式数字，类名一律带 `dwsp-` 前缀，随组件卸载一并移除，不触碰组件树以外的 DOM。
@@ -282,13 +303,15 @@ Host 暴露的接口（供设置页与诊断使用）：
 ## 开发与验证
 
 ```bash
-npm test              # 111 项单测：侧边栏决策、会话改写、代理判定、宿主接口、代理端到端、代理设置页
+npm test              # 158 项单测：侧边栏决策与面板折叠、会话改写、代理判定、宿主接口、代理端到端、代理设置页
 npm run test:cordis   # 真 Cordis 挂载校验
 ```
 
-单测分六个文件：
+单测分 8 个文件：
 
 - `test/core.test.mjs` —— 纯决策函数（条数折叠、排序、工作区移动计划、DOM 读行），按工作区记忆模型的读写与归属判定，以及**按 Cordis 与 DSH 的真实形状挂载整个浏览器半**。上下文替身做到了三件事：读未声明的服务直接抛错、`ctx.get(...)` 答 `undefined`、`ctx.inject(deps, cb)` 只在依赖齐备时回调；`ctx.get` 返回**每次读取新建的跟踪代理**（`cordis.original` 可取回原服务）；`remote.session.selectModel` 装成**只有 getter 的访问器**、`uiWorkspace.connectWorkspace` 放在**原型**上。模型服务缺席时浏览器半仍须挂载成功并注册设置行，这条是针对挂载失败缺陷的回归测试；访问器那条是针对「赋值被静默丢弃」缺陷的回归测试。
+- `test/panels.test.mjs` —— 面板折叠的纯决策：上限归一化、顺序合并、自动/手动可见性、当前面板的保底显示、拖拽落点换算，以及设置页与「更多」菜单在最小 React 运行时下的渲染内容；中英文案键位对齐。
+- `test/panels-dom.test.mjs` —— 用最小 DOM 驱动真实产物里的面板引擎：折叠与恢复、当前面板越界仍显示、保存顺序生效、手动模式、无宿主「更多」时的降级触发器，以及「长按 0.4 秒 → 拖动 → 落盘」的链路；长按不动会进入排序模式，随后把已折叠的面板从末位拖到首位也在覆盖范围内。
 - `test/conversation-edit.test.mjs` —— 分岔改写历史输入的消息解析、切点计算与失败处理。
 - `test/proxy-core.test.mjs` —— 纯路由判定、主机模式匹配、配置归一化与容错。
 - `test/proxy-host.test.mjs` —— 宿主入口：六条路由的注册表与前缀、`fetch` 补丁装上与卸载后原样还原、保存即生效并归一化地址、永不代理的 Provider 在入口处就被拒、错误方法与坏请求体得到 405／400 而不是抛异常。配置文件写在系统临时目录下一个固定名下。

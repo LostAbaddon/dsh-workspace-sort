@@ -1,11 +1,11 @@
 {
   "name": "dsh-workspace-sort",
-  "version": "1.1.0",
-  "description": "Shape the DSH sidebar and the LLM network path: order workspaces by their newest conversation, fold visible conversation counts, remember a model per workspace, edit a past user message in place, and route each LLM provider through a proxy or straight out.",
+  "version": "1.2.0",
+  "description": "Shape the DSH sidebar and the LLM network path: fold the global panel icons behind a configurable More menu, reorder them by long-press drag, order workspaces by their newest conversation, fold visible conversation counts, remember a model per workspace, edit a past user message in place, and route each LLM provider through a proxy or straight out.",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "node --test test/core.test.mjs test/conversation-edit.test.mjs test/proxy-core.test.mjs test/proxy-host.test.mjs test/proxy-routing.test.mjs test/proxy-page.test.mjs",
+    "test": "node --test test/core.test.mjs test/panels.test.mjs test/panels-dom.test.mjs test/conversation-edit.test.mjs test/proxy-core.test.mjs test/proxy-host.test.mjs test/proxy-routing.test.mjs test/proxy-page.test.mjs",
     "test:cordis": "node test/cordis/run.mjs"
   },
   "exports": {
@@ -53,6 +53,8 @@
     "bundle",
     "workspace",
     "sidebar",
+    "panels",
+    "fold",
     "session",
     "sort",
     "proxy",

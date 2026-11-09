@@ -1,4 +1,4 @@
 {
-  "title": "Workspace order and proxy routing",
-  "description": "Order workspaces by their newest conversation, make the per-workspace conversation count configurable, remember a model per workspace, and edit a past user message in place; it also decides per provider whether LLM requests go through a proxy, with the proxy URL and provider rules set on a settings page."
+  "title": "Workspace order, panel folding and proxy routing",
+  "description": "Fold the sidebar's global panels behind More once they exceed a configurable count, in a user-defined order that a long-press drag can rewrite; order workspaces by their newest conversation, make the per-workspace conversation count configurable, remember a model per workspace, and edit a past user message in place; it also decides per provider whether LLM requests go through a proxy, with the proxy URL and provider rules set on a settings page."
 }
