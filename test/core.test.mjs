@@ -34,8 +34,18 @@ const mod = spec.factory((id) => {
 const {
   DEFAULT_SETTINGS,
   MAX_VISIBLE,
+  VIEW_MODES,
+  DEFAULT_SHORTCUT,
   normalizeLimit,
+  normalizeShortcut,
+  shortcutFromEvent,
+  shortcutMatches,
+  shortcutLabel,
+  shortcutAria,
+  nextViewMode,
+  cycleViewMode,
   normalizeSettings,
+  WorkspaceShortcutSettingsRow,
   workspaceRecency,
   sortWorkspacesByRecency,
   insertIdBefore,
@@ -81,12 +91,29 @@ test('a user-supplied count is clamped into the accepted range', () => {
   assert.equal(normalizeLimit(10_000), MAX_VISIBLE)
 })
 
+const withShortcut = (patch) => ({
+  visiblePerWorkspace: 5,
+  sortWorkspaces: true,
+  rememberWorkspaceModel: true,
+  shortcutEnabled: true,
+  shortcutBinding: 'ctrl+shift+tab',
+  ...patch,
+})
+
 test('stored preferences fold into a complete document', () => {
-  assert.deepEqual(normalizeSettings(undefined), { visiblePerWorkspace: 5, sortWorkspaces: true, rememberWorkspaceModel: true })
-  assert.deepEqual(normalizeSettings({ visiblePerWorkspace: 8 }), { visiblePerWorkspace: 8, sortWorkspaces: true, rememberWorkspaceModel: true })
-  assert.deepEqual(normalizeSettings({ visiblePerWorkspace: 8, sortWorkspaces: false }), { visiblePerWorkspace: 8, sortWorkspaces: false, rememberWorkspaceModel: true })
-  assert.deepEqual(normalizeSettings({ visiblePerWorkspace: 8, sortWorkspaces: false, rememberWorkspaceModel: false }), { visiblePerWorkspace: 8, sortWorkspaces: false, rememberWorkspaceModel: false })
-  assert.deepEqual(normalizeSettings('junk'), { visiblePerWorkspace: 5, sortWorkspaces: true, rememberWorkspaceModel: true })
+  assert.deepEqual(normalizeSettings(undefined), withShortcut({}))
+  assert.deepEqual(normalizeSettings({ visiblePerWorkspace: 8 }), withShortcut({ visiblePerWorkspace: 8 }))
+  assert.deepEqual(normalizeSettings({ visiblePerWorkspace: 8, sortWorkspaces: false }), withShortcut({ visiblePerWorkspace: 8, sortWorkspaces: false }))
+  assert.deepEqual(
+    normalizeSettings({ visiblePerWorkspace: 8, sortWorkspaces: false, rememberWorkspaceModel: false }),
+    withShortcut({ visiblePerWorkspace: 8, sortWorkspaces: false, rememberWorkspaceModel: false }),
+  )
+  assert.deepEqual(
+    normalizeSettings({ shortcutEnabled: false, shortcutBinding: 'Control + Alt + K' }),
+    withShortcut({ shortcutEnabled: false, shortcutBinding: 'ctrl+alt+k' }),
+  )
+  assert.deepEqual(normalizeSettings({ shortcutEnabled: 'yes', shortcutBinding: 'tab' }), withShortcut({}))
+  assert.deepEqual(normalizeSettings('junk'), withShortcut({}))
 })
 
 test('the grouping mode is read from the shipped view store', () => {
@@ -107,6 +134,101 @@ test('the archived-row filter is read from the same store', () => {
   assert.equal(readArchivedFilter(storage('{"archivedFilter":"nonsense"}')), 'default')
   assert.equal(readArchivedFilter(storage(null)), 'default')
   assert.equal(readArchivedFilter(null), 'default')
+})
+
+// ---------------------------------------------------------------- shortcut
+
+test('the view-mode cycle visits the three shipped modes in order and wraps', () => {
+  assert.deepEqual(VIEW_MODES, ['workspace', 'workspace-tree', 'flat'])
+  assert.equal(nextViewMode('workspace'), 'workspace-tree')
+  assert.equal(nextViewMode('workspace-tree'), 'flat')
+  assert.equal(nextViewMode('flat'), 'workspace')
+  assert.equal(nextViewMode('unknown'), 'workspace')
+})
+
+test('a stored binding is canonicalized and invalid bindings fall back', () => {
+  assert.equal(DEFAULT_SHORTCUT, 'ctrl+shift+tab')
+  assert.equal(normalizeShortcut('Control + Shift + Tab'), 'ctrl+shift+tab')
+  assert.equal(normalizeShortcut('shift+ctrl+tab'), 'ctrl+shift+tab')
+  assert.equal(normalizeShortcut('⌘+shift+KeyK'), DEFAULT_SHORTCUT, 'a bogus key token falls back')
+  assert.equal(normalizeShortcut('⌘+shift+k'), 'shift+meta+k')
+  assert.equal(normalizeShortcut('option+space'), 'alt+space')
+  assert.equal(normalizeShortcut('alt+ArrowUp'), 'alt+up')
+  assert.equal(normalizeShortcut('tab'), DEFAULT_SHORTCUT, 'a bare key is not a global chord')
+  assert.equal(normalizeShortcut('ctrl+shift'), DEFAULT_SHORTCUT, 'modifier-only is not a chord')
+  assert.equal(normalizeShortcut('ctrl++'), DEFAULT_SHORTCUT)
+  assert.equal(normalizeShortcut(null), DEFAULT_SHORTCUT)
+})
+
+test('a keydown is matched against the exact chord and its modifiers', () => {
+  const press = (patch) => ({ key: 'Tab', ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, repeat: false, isComposing: false, ...patch })
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({})), true)
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({ key: 'A' })), false)
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({ altKey: true })), false)
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({ metaKey: true })), false)
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({ repeat: true })), false)
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({ isComposing: true })), false)
+  assert.equal(shortcutMatches('ctrl+alt+k', press({ key: 'k', altKey: true, shiftKey: false })), true)
+  assert.equal(shortcutMatches('ctrl+shift+tab', press({ key: 'ISO_Left_Tab' })), true, 'X11 Shift+Tab keeps the same chord')
+  assert.equal(shortcutMatches('nonsense', press({})), false)
+  assert.equal(shortcutMatches('ctrl+shift+tab', null), false)
+})
+
+test('the recorder only accepts a chord with at least one modifier', () => {
+  const press = (patch) => ({ key: 'Tab', ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, repeat: false, isComposing: false, ...patch })
+  assert.equal(shortcutFromEvent(press({})), 'ctrl+shift+tab')
+  assert.equal(shortcutFromEvent(press({ key: 'ArrowDown', altKey: true })), 'ctrl+alt+shift+down')
+  assert.equal(shortcutFromEvent(press({ key: ' ' })), 'ctrl+shift+space')
+  assert.equal(shortcutFromEvent(press({ ctrlKey: false, shiftKey: false })), null)
+  assert.equal(shortcutFromEvent(press({ key: 'Control' })), null)
+  assert.equal(shortcutFromEvent(press({ key: 'Shift' })), null)
+  assert.equal(shortcutFromEvent(press({ repeat: true })), null)
+})
+
+test('the settings row labels a binding for the visiting platform', () => {
+  assert.equal(shortcutLabel('ctrl+shift+tab', false), 'Ctrl + Shift + Tab')
+  assert.equal(shortcutLabel('ctrl+shift+tab', true), 'Ctrl + Shift + Tab')
+  assert.equal(shortcutLabel('meta+alt+k', true), 'Option + Cmd + K')
+  assert.equal(shortcutLabel('meta+alt+k', false), 'Alt + Meta + K')
+  assert.equal(shortcutLabel('ctrl+arrowup', false), 'Ctrl + ↑')
+  assert.equal(shortcutLabel('nonsense', false), 'Ctrl + Shift + Tab')
+  assert.equal(shortcutAria('ctrl+shift+tab'), 'Control+Shift+Tab')
+  assert.equal(shortcutAria('meta+alt+k'), 'Alt+Meta+K')
+  assert.equal(shortcutAria('ctrl+arrowup'), 'Control+ArrowUp')
+})
+
+test('the shortcut settings row renders the switch, the chord and the reset control', () => {
+  const snapshot = normalizeSettings({})
+  const store = {
+    getSnapshot: () => snapshot,
+    subscribe: () => () => {},
+  }
+  const tree = WorkspaceShortcutSettingsRow({
+    t: (key) => key,
+    settings: store,
+    update: () => {},
+    recorder: { set: () => {} },
+  })
+  const text = JSON.stringify(tree)
+  assert.match(text, /settings\.shortcutTitle/)
+  assert.match(text, /settings\.shortcutDescription/)
+  assert.match(text, /Ctrl \+ Shift \+ Tab/)
+  assert.match(text, /settings\.shortcutEnable/)
+  assert.match(text, /settings\.shortcutReset/)
+})
+
+test('one cycle writes the next mode through the shipped view actions', () => {
+  const storage = (raw) => ({ getItem: (key) => (key === 'dsh.workspace.view.v5' ? raw : null) })
+  const applied = []
+  const view = { setGroupBy: (mode) => applied.push(mode) }
+  assert.equal(cycleViewMode(view, storage('{"groupBy":"workspace"}')), 'workspace-tree')
+  assert.equal(cycleViewMode(view, storage('{"groupBy":"workspace-tree"}')), 'flat')
+  assert.equal(cycleViewMode(view, storage('{"groupBy":"flat"}')), 'workspace')
+  assert.deepEqual(applied, ['workspace-tree', 'flat', 'workspace'])
+  assert.equal(cycleViewMode(null, storage('{"groupBy":"workspace"}')), null)
+  assert.equal(cycleViewMode({}, storage('{"groupBy":"workspace"}')), null)
+  assert.equal(cycleViewMode(view, null, 'flat'), 'workspace', 'a refusing storage falls back to the last mode')
+  assert.equal(cycleViewMode(view, {}, 'workspace'), 'workspace-tree')
 })
 
 // ---------------------------------------------------------------- fold counting
@@ -534,7 +656,13 @@ function modelFixture(options = {}) {
       return this.connectWorkspace(workspaceId)
     },
   }
+  const viewCalls = []
   const uiWorkspace = Object.create(workspacePrototype)
+  uiWorkspace.view = {
+    setGroupBy(mode) {
+      viewCalls.push(mode)
+    },
+  }
   const services = {
     workspaces: {
       list: { getSnapshot: () => ({ phase: 'ready', items: workspaces, archivedSessionIds: [] }), subscribe: () => () => {} },
@@ -553,7 +681,7 @@ function modelFixture(options = {}) {
     'remote.session': remoteSession,
     uiWorkspace,
   }
-  return { services, registrations, seen, outcome, created, byId, workspaces, remoteSession, uiWorkspace }
+  return { services, registrations, seen, outcome, created, byId, workspaces, remoteSession, uiWorkspace, viewCalls }
 }
 
 /**
@@ -671,14 +799,99 @@ test('the Client half mounts with the model services absent and still registers 
   try {
     const byId = Object.fromEntries(fixture.registrations.map((entry) => [entry.id, entry]))
     assert.ok(byId['workspace-sort'], 'the settings row is registered even without the model layer')
+    assert.ok(byId['workspace-sort-shortcut'], 'the shortcut row is registered even without uiWorkspace')
     assert.ok(byId['llm-proxy'], 'the proxy-routing page is registered alongside the settings row')
     assert.deepEqual(
       harness.unavailable,
-      ['uiWorkspace', 'remote.session', 'uiWorkspace'],
+      ['uiWorkspace', 'remote.session', 'uiWorkspace', 'uiWorkspace'],
       'each deferred service is requested by its own consumer, and none of them is awaited',
     )
   } finally {
     harness.disposeAll()
+  }
+})
+
+test('the configurable shortcut cycles the shipped view mode', () => {
+  const listeners = new Map()
+  const fakeWindow = {
+    addEventListener(type, listener) {
+      const set = listeners.get(type) ?? new Set()
+      set.add(listener)
+      listeners.set(type, set)
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener)
+    },
+  }
+  const previousWindow = globalThis.window
+  globalThis.window = fakeWindow
+  const fixture = modelFixture()
+  const { store, harness } = mount(fixture, (storage) => {
+    storage.setItem('dsh.workspace.view.v5', JSON.stringify({ groupBy: 'workspace' }))
+  })
+  try {
+    const row = fixture.registrations.find((entry) => entry.id === 'workspace-sort-shortcut')
+    assert.ok(row, 'the shortcut row is registered')
+    const injected = row.inject()
+    assert.equal(typeof injected.update, 'function')
+    const onKeyDown = [...(listeners.get('keydown') ?? [])][0]
+    assert.equal(typeof onKeyDown, 'function', 'the cycle listener is installed')
+
+    let prevented = 0
+    let stopped = 0
+    const press = (patch) => ({
+      key: 'Tab',
+      ctrlKey: true,
+      shiftKey: true,
+      altKey: false,
+      metaKey: false,
+      repeat: false,
+      isComposing: false,
+      defaultPrevented: false,
+      preventDefault: () => {
+        prevented += 1
+      },
+      stopPropagation: () => {
+        stopped += 1
+      },
+      ...patch,
+    })
+
+    onKeyDown(press({}))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree'], 'the first press advances one mode')
+    assert.equal(prevented, 1, 'the handled chord is consumed')
+    assert.equal(stopped, 1, 'the handled chord does not reach the rest of the page')
+
+    // The shipped view store persists synchronously; mirror its write.
+    store.storage.setItem('dsh.workspace.view.v5', JSON.stringify({ groupBy: 'workspace-tree' }))
+    onKeyDown(press({}))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree', 'flat'], 'the next press advances again')
+    store.storage.setItem('dsh.workspace.view.v5', JSON.stringify({ groupBy: 'flat' }))
+
+    onKeyDown(press({ key: 'A' }))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree', 'flat'], 'another chord is left alone')
+
+    injected.update({ shortcutBinding: 'ctrl+alt+k' })
+    onKeyDown(press({}))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree', 'flat'], 'the replaced binding no longer fires')
+    onKeyDown(press({ key: 'k', altKey: true, shiftKey: false }))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree', 'flat', 'workspace'], 'the recorded binding fires')
+
+    injected.recorder.set(true)
+    store.storage.setItem('dsh.workspace.view.v5', JSON.stringify({ groupBy: 'workspace' }))
+    onKeyDown(press({ key: 'k', altKey: true, shiftKey: false }))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree', 'flat', 'workspace'], 'the cycle is silent while recording')
+    injected.recorder.set(false)
+
+    injected.update({ shortcutEnabled: false })
+    onKeyDown(press({ key: 'k', altKey: true, shiftKey: false }))
+    assert.deepEqual(fixture.viewCalls, ['workspace-tree', 'flat', 'workspace'], 'a disabled shortcut does nothing')
+
+    harness.disposeAll()
+    assert.equal((listeners.get('keydown') ?? new Set()).size, 0, 'the listener is removed with the plugin')
+  } finally {
+    harness.disposeAll()
+    globalThis.window = previousWindow
   }
 })
 

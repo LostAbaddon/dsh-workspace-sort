@@ -1,7 +1,7 @@
 {
   "name": "dsh-workspace-sort",
-  "version": "1.2.0",
-  "description": "Shape the DSH sidebar and the LLM network path: fold the global panel icons behind a configurable More menu, reorder them by long-press drag, order workspaces by their newest conversation, fold visible conversation counts, remember a model per workspace, edit a past user message in place, and route each LLM provider through a proxy or straight out.",
+  "version": "1.3.0",
+  "description": "Shape the DSH sidebar and the LLM network path: cycle the three sidebar views with a configurable shortcut, fold the global panel icons behind a configurable More menu, reorder them by long-press drag, order workspaces by their newest conversation, fold visible conversation counts, remember a model per workspace, edit a past user message in place, and route each LLM provider through a proxy or straight out.",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
@@ -59,7 +59,9 @@
     "sort",
     "proxy",
     "llm",
-    "network"
+    "network",
+    "shortcut",
+    "keyboard"
   ],
   "publishConfig": {
     "access": "public"

@@ -66,11 +66,28 @@ const mod = spec.factory((id) => {
 })
 
 const store = {}
+store['dsh.workspace.view.v5'] = JSON.stringify({ groupBy: 'workspace' })
 globalThis.localStorage = {
   getItem: (key) => (key in store ? store[key] : null),
   setItem: (key, value) => {
     store[key] = String(value)
   },
+}
+
+/** The plugin's window listeners, so the view-mode shortcut can be driven directly. */
+const keydownListeners = []
+const viewCalls = []
+globalThis.window = {
+  addEventListener(type, listener) {
+    if (type === 'keydown') keydownListeners.push(listener)
+  },
+  removeEventListener(type, listener) {
+    if (type !== 'keydown') return
+    const index = keydownListeners.indexOf(listener)
+    if (index !== -1) keydownListeners.splice(index, 1)
+  },
+  setTimeout: (callback, delay) => setTimeout(callback, delay),
+  clearTimeout: (id) => clearTimeout(id),
 }
 
 /**
@@ -108,6 +125,15 @@ class RemoteNamespaceService {
 
 /** The Workspace service: methods on the prototype, like the shipped class. */
 class UiWorkspaceService {
+  constructor() {
+    this.view = {
+      setGroupBy(mode) {
+        viewCalls.push(mode)
+        store['dsh.workspace.view.v5'] = JSON.stringify({ groupBy: mode })
+      },
+    }
+  }
+
   async connectWorkspace() {
     return 'sess-new'
   }
@@ -182,7 +208,13 @@ const sections = byName('settings.section')
 const proxy = sections.find((entry) => entry.id === 'llm-proxy')
 const panels = sections.find((entry) => entry.id === 'sidebar-panels')
 const actions = byName('sidebar.panellist.actions').find((entry) => entry.id === 'workspace-sort-panels')
-check('the Client half mounts and registers its settings row', byName('settings.general.item').length === 1)
+const generalRows = byName('settings.general.item')
+check(
+  'the Client half mounts and registers both General-settings rows',
+  generalRows.length === 2
+    && generalRows.some((entry) => entry.id === 'workspace-sort')
+    && generalRows.some((entry) => entry.id === 'workspace-sort-shortcut'),
+)
 check('the Client half registers the proxy-routing page', proxy !== undefined)
 check('the Client half registers the sidebar-panels page', panels !== undefined)
 
@@ -198,6 +230,43 @@ check('the panel More-menu rows register with a negative order', actions?.order 
 check('the panel More-menu rows render through a component', typeof actions?.component === 'function')
 
 check('the remote method is still an accessor after interception', Object.getOwnPropertyDescriptor(namespace, 'selectModel')?.get !== undefined)
+
+// The configurable view-mode shortcut, driven through the real Cordis effect.
+const shortcutRow = generalRows.find((entry) => entry.id === 'workspace-sort-shortcut')
+const shortcutInject = typeof shortcutRow?.inject === 'function' ? shortcutRow.inject() : {}
+const press = (patch = {}) => {
+  let consumed = false
+  const event = {
+    key: 'Tab',
+    ctrlKey: true,
+    shiftKey: true,
+    altKey: false,
+    metaKey: false,
+    repeat: false,
+    isComposing: false,
+    defaultPrevented: false,
+    preventDefault() {
+      consumed = true
+    },
+    stopPropagation() {},
+    ...patch,
+  }
+  keydownListeners[0](event)
+  return consumed
+}
+check('the view-mode shortcut is installed on the window', typeof keydownListeners[0] === 'function')
+const consumed = press()
+check('the shortcut cycles WorkSpace to Workspace Tree and consumes the chord', viewCalls[0] === 'workspace-tree' && consumed === true)
+press()
+check('the shortcut cycles Workspace Tree to the single list', viewCalls[1] === 'flat')
+press()
+check('the shortcut wraps the single list back to WorkSpace', viewCalls[2] === 'workspace')
+shortcutInject.update?.({ shortcutEnabled: false })
+press()
+check('a disabled shortcut leaves the view mode alone', viewCalls.length === 3)
+shortcutInject.update?.({ shortcutEnabled: true, shortcutBinding: 'ctrl+alt+k' })
+press({ key: 'k', altKey: true, shiftKey: false })
+check('a recorded binding drives the cycle', viewCalls[3] === 'workspace-tree')
 
 // A model and thinking depth chosen inside one Workspace, through the wire face.
 await ctx.get('remote.session').selectModel({
